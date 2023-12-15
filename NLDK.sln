@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NLDK", "NLDK\NLDK.csproj", "{1D61A12A-3055-44E0-BA2D-ED23D14B4684}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nldksample", "nldksample\nldksample.csproj", "{59429581-B370-4B97-86D5-E958A704CC4E}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NBXplorer.Client", "..\NBXplorer\NBXplorer.Client\NBXplorer.Client.csproj", "{6C0589C1-122C-4684-AD15-A4F5519EEA0C}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1D61A12A-3055-44E0-BA2D-ED23D14B4684}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1D61A12A-3055-44E0-BA2D-ED23D14B4684}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1D61A12A-3055-44E0-BA2D-ED23D14B4684}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1D61A12A-3055-44E0-BA2D-ED23D14B4684}.Release|Any CPU.Build.0 = Release|Any CPU
+		{59429581-B370-4B97-86D5-E958A704CC4E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{59429581-B370-4B97-86D5-E958A704CC4E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{59429581-B370-4B97-86D5-E958A704CC4E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{59429581-B370-4B97-86D5-E958A704CC4E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

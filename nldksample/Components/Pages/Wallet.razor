@@ -1,0 +1,111 @@
+﻿@page "/wallets/{walletId}"
+@using NLDK
+@using Newtonsoft.Json
+@using Script = NBitcoin.Script
+@using NBitcoin
+@using NBXplorer
+@using Coin = NLDK.Coin
+@inject WalletService WalletService
+@inject Network Network
+@inject ExplorerClient ExplorerClient
+<PageTitle>Home</PageTitle>
+@if (WalletData is null)
+{
+    <p>loading</p>
+}
+else
+{
+    <pre>
+    @JsonConvert.SerializeObject(WalletData, Formatting.Indented, new JsonSerializerSettings 
+{ 
+        ReferenceLoopHandling = ReferenceLoopHandling.Ignore
+})
+    
+</pre>
+
+    <button class="btn-primary" @onclick="Derive">Derive</button>
+    <span>total bal: @Balance</span>
+    <ul>
+        @foreach (var s in WalletData.Scripts)
+        {
+            var totalReceived = s.Script.Coins.Sum(coin => coin.Value);
+            var totalSpent = s.Script.Coins.Where(coin => coin.SpendingTransactionHash is not null).Sum(coin => coin.Value);
+            <li>
+                <span>@Script.FromHex(s.ScriptId).GetDestinationAddress(Network)</span>
+                @if (s.DerivationPath is null)
+                {
+                    <span>UNSPENDABLE!</span>
+                }
+                @s.Script.Coins.Count coins, balance:@(totalReceived-totalSpent) , total rec: @totalReceived, total sent: @totalSpent
+            </li>
+        }
+    </ul>
+    <input type="number" @bind="SendValue" step="any" min="0.0000001" max="@Balance" placeholder="send amt"/>
+    <input type="text" @bind="SendDest" />
+    <button @onclick="Send">Send</button>
+}
+
+
+@code{
+
+    private decimal Balance
+    {
+        get
+        {
+            return UnspentCoins?.Sum(coin => coin.Value) ?? 0;
+        }
+    }
+
+    private IEnumerable<Coin>? UnspentCoins => WalletData?.Scripts.Where(walletScript => walletScript.DerivationPath is not null).SelectMany(script => script.Script.Coins).Where(coin => coin.SpendingTransactionHash is null);
+    
+    [Parameter] public string WalletId { get; set; }
+    private NLDK.Wallet? WalletData { get; set; }
+
+    protected override Task OnParametersSetAsync()
+    {
+        _ = Fetch();
+        return base.OnParametersSetAsync();
+    }
+
+
+    private async Task Fetch()
+    {
+        await WalletService.Get(WalletId).ContinueWith(task =>
+        {
+            WalletData = task.Result;
+            InvokeAsync(StateHasChanged);
+        });
+    }
+
+    private async Task Derive()
+    {
+        await WalletService.DeriveScript(WalletId);
+        await Fetch();
+    }
+
+    private decimal SendValue { get; set; }
+
+    private string? SendDest { get; set; }
+
+    private async  Task Send()
+    {
+        if (string.IsNullOrEmpty(SendDest))
+        {
+            return;
+        }
+       
+        SendDest = SendDest.Trim();
+        var addr = BitcoinAddress.Create(SendDest, ExplorerClient.Network.NBitcoinNetwork);
+        var feeRate = await ExplorerClient.GetFeeRateAsync(1, new FeeRate(100m));
+
+
+        var tx = await WalletService.CreateTransaction(WalletId, new List<TxOut>()
+        {
+            new TxOut(Money.Coins(SendValue), addr.ScriptPubKey)
+        }, feeRate.FeeRate);
+        
+        await ExplorerClient.BroadcastAsync(tx);
+
+    }
+
+}
