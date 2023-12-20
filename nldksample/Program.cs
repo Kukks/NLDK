@@ -19,7 +19,7 @@ builder.Services
     .AddHostedService<NBXListener>(provider => provider.GetRequiredService<NBXListener>())
     .AddSingleton<AsyncKeyedLocker<string>>()
     .AddSingleton<WalletService>()
-     .AddLDK()
+    .AddLDK()
     .AddSingleton<NBXListener>()
     .AddSingleton<Network>(provider => provider.GetRequiredService<ExplorerClient>().Network.NBitcoinNetwork)
     .AddSingleton<ExplorerClient>(provider =>
@@ -52,7 +52,8 @@ public class MigratonHostedService : IHostedService
     private readonly IDbContextFactory<WalletContext> _dbContextFactory;
     private readonly ILogger<MigratonHostedService> _logger;
 
-    public MigratonHostedService(IDbContextFactory<WalletContext> dbContextFactory, ILogger<MigratonHostedService> logger)
+    public MigratonHostedService(IDbContextFactory<WalletContext> dbContextFactory,
+        ILogger<MigratonHostedService> logger)
     {
         _dbContextFactory = dbContextFactory;
         _logger = logger;

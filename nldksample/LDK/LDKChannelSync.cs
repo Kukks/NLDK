@@ -2,6 +2,7 @@
 using NBXplorer;
 using NBXplorer.Models;
 using org.ldk.structs;
+using Wallet = NLDK.Wallet;
 
 namespace nldksample.LDK;
 
@@ -114,12 +115,12 @@ public class LDKChannelSync : IScopedHostedService
     }
 
     private void OnTransactionUpdate(object? sender,
-        (TrackedSource TrackedSource, TransactionInformation TransactionInformation) e)
+        (Wallet Wallet, TrackedSource TrackedSource, TransactionInformation TransactionInformation) valueTuple)
     {
-        if (!_currentWalletService.IsThisWallet(e.TrackedSource))
+        if (_currentWalletService.CurrentWallet != valueTuple.Wallet.Id)
             return;
 
-        var tx = e.TransactionInformation.Transaction;
+        var tx = valueTuple.TransactionInformation.Transaction;
 
         foreach (var confirm in _confirms)
         {

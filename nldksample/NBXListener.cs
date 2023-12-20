@@ -1,5 +1,6 @@
 ﻿using NBitcoin;
 using NBXplorer;
+using NBXplorer.DerivationStrategy;
 using NBXplorer.Models;
 using NLDK;
 
@@ -8,19 +9,20 @@ public class NBXListener : IHostedService
     private readonly ExplorerClient _explorerClient;
     private readonly WalletService _walletService;
     private readonly ILogger<NBXListener> _logger;
+    private readonly Network _network;
     private WebsocketNotificationSession _session;
 
-    public NBXListener(ExplorerClient explorerClient, WalletService walletService, ILogger<NBXListener> logger)
+    public NBXListener(ExplorerClient explorerClient, WalletService walletService, ILogger<NBXListener> logger, Network network)
     {
         _explorerClient = explorerClient;
         _walletService = walletService;
         _logger = logger;
+        _network = network;
     }
 
     public event EventHandler<NewBlockEvent>? NewBlock;
 
-    public event EventHandler<(TrackedSource TrackedSource, TransactionInformation TransactionInformation)>?
-        TransactionUpdate;
+    public event EventHandler<(Wallet Wallet, TrackedSource TrackedSource, TransactionInformation TransactionInformation)>? TransactionUpdate;
 
     public TaskCompletionSource ConnectedAndSynced { get; private set; } = new();
 
@@ -35,6 +37,28 @@ public class NBXListener : IHostedService
                 {
                     _logger.LogInformation("Waiting for NBXplorer to start...");
                     await _explorerClient.WaitServerStartedAsync(cancellationToken);
+                    var ws = await _walletService.GetAll(cancellationToken);
+                    var factory = new DerivationStrategyFactory(_network);
+                    foreach (var wallet in ws)
+                    {
+                        var wts = new WalletTrackedSource(wallet.Id);
+                        foreach (var alias in wallet.AliasWalletName)
+                        {
+                            try
+                            {
+                               var ds =  factory.Parse(alias);
+                               var dts = new DerivationSchemeTrackedSource(ds);
+                               
+                               await _explorerClient.TrackAsync(dts, new TrackWalletRequest()
+                               {
+                                   ParentWallet = wts
+                               }, lcts.Token);
+                            }
+                            catch (Exception e)
+                            {
+                            }
+                        }
+                    }
                     _session = await _explorerClient.CreateWebsocketNotificationSessionAsync(cancellationToken);
                     await _session.ListenAllTrackedSourceAsync(cancellation: cancellationToken);
                     await _session.ListenNewBlockAsync(cancellation: cancellationToken);
@@ -88,8 +112,8 @@ public class NBXListener : IHostedService
                     if (tx is null)
                         continue;
 
-                    await _walletService.OnTransactionSeen(w, tx, cancellationToken);
-                    TransactionUpdate?.Invoke(this, (newTransactionEvent.TrackedSource, tx));
+                    await _walletService.OnTransactionSeen(w,newTransactionEvent.TrackedSource, tx, cancellationToken);
+                    TransactionUpdate?.Invoke(this, (w, newTransactionEvent.TrackedSource, tx));
                     break;
             }
         }

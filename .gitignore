@@ -6,3 +6,4 @@ riderModule.iml
 .idea
 nldksample/wallet.db-shm
 nldksample/wallet.db-wal
+nldksample/wallet.db

@@ -1,4 +1,8 @@
-﻿using EventHandler = System.EventHandler;
+﻿using System.Threading.Channels;
+using NBitcoin;
+using org.ldk.structs;
+using EventHandler = System.EventHandler;
+using NodeInfo = BTCPayServer.Lightning.NodeInfo;
 
 namespace nldksample.LDK;
 
@@ -6,14 +10,23 @@ public class LDKNode : IAsyncDisposable, IHostedService
 {
     private readonly CurrentWalletService _currentWalletService;
     private readonly ILogger _logger;
+    private readonly ChannelManager _channelManager;
+    private readonly LDKPeerHandler _peerHandler;
+
     public LDKNode(IServiceProvider serviceProvider,
-        CurrentWalletService currentWalletService, LDKWalletLogger logger)
+        CurrentWalletService currentWalletService, LDKWalletLogger logger, ChannelManager channelManager, LDKPeerHandler peerHandler)
     {
         _currentWalletService = currentWalletService;
         _logger = logger;
+        _channelManager = channelManager;
+        _peerHandler = peerHandler;
         ServiceProvider = serviceProvider;
     }
 
+    public PubKey NodeId => new(_channelManager.get_our_node_id());
+    
+    public BTCPayServer.Lightning.NodeInfo? NodeInfo => _peerHandler.Endpoint is null ? null :  NodeInfo.Parse($"{NodeId}@{_peerHandler.Endpoint}");
+    
 
     public event EventHandler OnDisposing;
 

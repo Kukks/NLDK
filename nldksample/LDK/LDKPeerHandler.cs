@@ -1,6 +1,8 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using NBitcoin;
 using org.ldk.structs;
+using NodeInfo = BTCPayServer.Lightning.NodeInfo;
 
 namespace nldksample.LDK;
 
@@ -23,17 +25,62 @@ public class LDKPeerHandler : IScopedHostedService
     }
 
 
+    public async Task ConnectAsync(NodeInfo nodeInfo, CancellationToken cancellationToken)
+    {
+       await ConnectAsync(nodeInfo.NodeId, IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port),
+           cancellationToken);
+    }
+    public async Task ConnectAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken)
+    {
+        using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        SocketDescriptor? descriptor = null;
+        try
+        {
+            socket.Blocking = false;
+
+            await socket.ConnectAsync(remote, cancellationToken);
+            if (!socket.Connected)
+            {
+                throw new IOException("Failed to connect");
+            }
+
+            descriptor = SocketDescriptor.new_impl(new LDKSocketDescriptor(socket));
+            var result = _peerManager.new_outbound_connection(theirNodeId.ToBytes(), descriptor,
+                Option_SocketAddressZ.some(remote.Endpoint()));
+            if (!result.is_ok())
+            {
+                return;
+            }
+
+            var initialBytes = ((Result_CVec_u8ZPeerHandleErrorZ.Result_CVec_u8ZPeerHandleErrorZ_OK) result).res;
+            
+            if (initialBytes.Length != descriptor.send_data(initialBytes, true))
+            {
+                return;
+            }
+            while (socket.Connected)
+            {
+                _peerManager.process_events();
+            }
+        }
+        finally
+        {
+            descriptor?.disconnect_socket();
+        }
+    }
+
+
     private async Task Listen()
     {
         try
         {
             _logger.LogInformation("Starting LDKPeerHandler");
-            var ip = new IPEndPoint(IPAddress.Any, 9735);
-            using Socket listener = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
+            var ip = new IPEndPoint(IPAddress.Any, 0);
+            using var listener = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
 
             listener.Bind(ip);
             listener.Listen(100);
-
+            Endpoint =   listener.RemoteEndPoint?? new IPEndPoint(IPAddress.Loopback, ip.Port);
             _logger.LogInformation("LDKPeerHandler started");
 
             while (!_cts.IsCancellationRequested)
@@ -56,9 +103,12 @@ public class LDKPeerHandler : IScopedHostedService
         }
         catch (Exception e)
         {
+            Endpoint = null;
             _logger.LogError(e, "Error starting LDKPeerHandler");
         }
     }
+
+    public EndPoint? Endpoint { get; private set; }
 
     private async Task HandleClientAsync(Socket client, CancellationToken cancellationToken)
     {

@@ -5,7 +5,9 @@
 @using NBitcoin
 @using NBXplorer
 @using nldksample.LDK
+@using org.ldk.structs
 @using Coin = NLDK.Coin
+@using TxOut = NBitcoin.TxOut
 @inject WalletService WalletService
 @inject Network Network
 @inject ExplorerClient ExplorerClient
@@ -17,8 +19,6 @@
 }
 else
 {
-    
-    
     <button class="btn-primary" @onclick="Derive">Derive</button>
     <span>total bal: @Balance</span>
     <ul>
@@ -27,21 +27,39 @@ else
             var totalReceived = s.Script.Coins.Sum(coin => coin.Value);
             var totalSpent = s.Script.Coins.Where(coin => coin.SpendingTransactionHash is not null).Sum(coin => coin.Value);
             <li>
-                <span>@Script.FromHex(s.ScriptId).GetDestinationAddress(Network)</span>
+                <input type="text" readonly="readonly" value="@Script.FromHex(s.ScriptId).GetDestinationAddress(Network)"/>
                 @if (s.DerivationPath is null)
                 {
                     <span>UNSPENDABLE!</span>
                 }
-                @s.Script.Coins.Count coins, balance:@(totalReceived-totalSpent) , total rec: @totalReceived, total sent: @totalSpent
+                @s.Script.Coins.Count coins, balance:@(totalReceived - totalSpent) , total rec: @totalReceived, total sent: @totalSpent
             </li>
         }
     </ul>
-    
+
     <input type="number" @bind="SendValue" step="any" min="0.0000001" max="@Balance" placeholder="send amt"/>
-    <input type="text" @bind="SendDest" />
+    <input type="text" @bind="SendDest"/>
     <button @onclick="Send">Send</button>
-    
-    
+
+    @if (_node is not null)
+    {
+        var peerManager = _node.ServiceProvider.GetService<PeerManager>();
+        var peers = peerManager.get_peer_node_ids().Select(zz => new PubKey(zz.get_a()) + ":" + (zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x ? x.some.to_str() : ""));
+        <div>Peers: @(string.Join(", ", peers))</div>
+
+        <input type="text" @bind="ConnectPeer"/>
+        <button @onclick="ConnectToPeer">Connect to peer</button>
+        if (_node.NodeInfo is not null)
+        {
+            <div>Node Info: @_node.NodeInfo.ToString()</div>
+        }
+        else
+        {
+            <div>Pubkey: @_node.NodeId.ToString()</div>
+        }
+    }
+
+
     <pre>
     @JsonConvert.SerializeObject(WalletData, Formatting.Indented, new JsonSerializerSettings 
 { 
@@ -53,6 +71,7 @@ else
 
 
 @code{
+    private LDKNode? _node;
 
     private decimal Balance
     {
@@ -73,13 +92,12 @@ else
 
     private async Task Fetch()
     {
-        await WalletService.Get(WalletId).ContinueWith(task =>
+        await WalletService.Get(WalletId).ContinueWith(async task =>
         {
             WalletData = task.Result;
-            InvokeAsync(StateHasChanged);
+            _node = await NodeManager.GetLDKNodeForWallet(WalletData);
+            await InvokeAsync(StateHasChanged);
         });
-
-        await NodeManager.GetLDKNodeForWallet(WalletData);
     }
 
     private async Task Derive()
@@ -89,8 +107,8 @@ else
     }
 
     private decimal SendValue { get; set; }
-
     private string? SendDest { get; set; }
+    private string? ConnectPeer { get; set; }
 
     private async Task Send()
     {
@@ -103,13 +121,27 @@ else
         var addr = BitcoinAddress.Create(SendDest, ExplorerClient.Network.NBitcoinNetwork);
         var feeRate = await ExplorerClient.GetFeeRateAsync(1, new FeeRate(100m));
 
-
         var tx = await WalletService.CreateTransaction(WalletId, new List<TxOut>()
         {
             new TxOut(Money.Coins(SendValue), addr.ScriptPubKey)
         }, feeRate.FeeRate);
-
         await ExplorerClient.BroadcastAsync(tx.Value.Tx);
+    }
+
+    private async Task ConnectToPeer()
+    {
+        if (string.IsNullOrEmpty(ConnectPeer))
+        {
+            return;
+        }
+
+        if (!BTCPayServer.Lightning.NodeInfo.TryParse(ConnectPeer, out var nodeInfo))
+        {
+            return;
+        }
+
+        var peerHandler = _node.ServiceProvider.GetService<LDKPeerHandler>();
+        _ = peerHandler.ConnectAsync(nodeInfo, CancellationToken.None);
     }
 
 }
