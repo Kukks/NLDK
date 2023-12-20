@@ -1,10 +1,10 @@
 using AsyncKeyedLock;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using NBitcoin;
 using NBXplorer;
 using NLDK;
 using nldksample.Components;
+using nldksample.LDK;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,14 +15,15 @@ builder.Services.AddRazorComponents()
 var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
 
 builder.Services
-    .AddScoped<WalletService>()
+    .AddHostedService<MigratonHostedService>()
+    .AddHostedService<NBXListener>(provider => provider.GetRequiredService<NBXListener>())
     .AddSingleton<AsyncKeyedLocker<string>>()
     .AddSingleton<WalletService>()
-    // .AddSingleton(builder.Services)
-    .AddHostedService<NBXListener>()
-    
+     .AddLDK()
+    .AddSingleton<NBXListener>()
     .AddSingleton<Network>(provider => provider.GetRequiredService<ExplorerClient>().Network.NBitcoinNetwork)
-    .AddSingleton<ExplorerClient>(provider => new ExplorerClient(nbxNetworkProvider.GetFromCryptoCode("BTC"), new Uri("http://localhost:4774")))
+    .AddSingleton<ExplorerClient>(provider =>
+        new ExplorerClient(nbxNetworkProvider.GetFromCryptoCode("BTC"), new Uri("http://localhost:24446")))
     .AddDbContextFactory<WalletContext>(optionsBuilder => optionsBuilder.UseSqlite("wallet.db"));
 
 var app = builder.Build();
@@ -34,7 +35,7 @@ if (!app.Environment.IsDevelopment())
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
-app.Services.GetRequiredService<IDbContextFactory<WalletContext>>().CreateDbContext().Database.Migrate();
+
 app.UseHttpsRedirection();
 
 app.UseStaticFiles();
@@ -44,3 +45,28 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 app.Run();
+
+
+public class MigratonHostedService : IHostedService
+{
+    private readonly IDbContextFactory<WalletContext> _dbContextFactory;
+    private readonly ILogger<MigratonHostedService> _logger;
+
+    public MigratonHostedService(IDbContextFactory<WalletContext> dbContextFactory, ILogger<MigratonHostedService> logger)
+    {
+        _dbContextFactory = dbContextFactory;
+        _logger = logger;
+    }
+
+    public async Task StartAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Migrating database");
+        await using var ctx = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await ctx.Database.MigrateAsync(cancellationToken: cancellationToken);
+        _logger.LogInformation("Database migrated");
+    }
+
+    public async Task StopAsync(CancellationToken cancellationToken)
+    {
+    }
+}

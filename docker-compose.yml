@@ -1,0 +1,58 @@
+version: "3"
+services:
+
+  bitcoind:
+    container_name: nldk_bitcoind
+    restart: unless-stopped
+    image: btcpayserver/bitcoin:26.0
+    environment:
+      BITCOIN_NETWORK: regtest
+      BITCOIN_WALLETDIR: "/data/wallets"
+      BITCOIN_EXTRA_ARGS: |-
+        rpcuser=ceiwHEbqWI83
+        rpcpassword=DwubwWsoo3
+        rpcport=43782
+        rpcbind=0.0.0.0:43782
+        rpcallowip=0.0.0.0/0
+        port=39388
+        whitelist=0.0.0.0/0
+        zmqpubrawblock=tcp://0.0.0.0:28332
+        zmqpubrawtx=tcp://0.0.0.0:28333
+        deprecatedrpc=signrawtransaction
+        fallbackfee=0.0002
+    ports:
+      - "43782:43782"
+      - "39388:39388"
+    expose:
+      - "43782" # RPC
+      - "39388" # P2P
+      - "28332" # ZMQ
+      - "28333" # ZMQ
+    volumes:
+      - "bitcoin_datadir:/data"
+  postgres:
+    image: postgres:13
+    command: [ "-c", "random_page_cost=1.0", "-c", "shared_preload_libraries=pg_stat_statements" ]
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "39383:5432"
+    expose:
+      - "5432"
+  pgadmin:
+    image: dpage/pgadmin4:6
+    environment:
+      PGADMIN_DEFAULT_EMAIL: "test@test.com"
+      PGADMIN_DEFAULT_PASSWORD: "a"
+    ports:
+      - "8484:80"
+    expose:
+      - "5432"
+    depends_on:
+      - postgres
+    volumes:
+      - ./Docker/servers.json:/pgadmin4/servers.json
+
+
+volumes:
+  bitcoin_datadir:

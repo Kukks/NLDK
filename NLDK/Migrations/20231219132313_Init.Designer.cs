@@ -11,14 +11,33 @@ using NLDK;
 namespace NLDK.Migrations
 {
     [DbContext(typeof(WalletContext))]
-    [Migration("20231214141613_Init4")]
-    partial class Init4
+    [Migration("20231219132313_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.0");
+
+            modelBuilder.Entity("NLDK.ArbitraryData", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte[]>("Value")
+                        .IsRequired()
+                        .HasColumnType("BLOB");
+
+                    b.Property<string>("WalletId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.HasIndex("WalletId");
+
+                    b.ToTable("ArbitraryData");
+                });
 
             modelBuilder.Entity("NLDK.Channel", b =>
                 {
@@ -84,6 +103,9 @@ namespace NLDK.Migrations
                     b.Property<bool>("Inbound")
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("PaymentId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Preimage")
                         .HasColumnType("TEXT");
 
@@ -99,7 +121,7 @@ namespace NLDK.Migrations
                     b.Property<long>("Value")
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("WalletId", "PaymentHash", "Inbound");
+                    b.HasKey("WalletId", "PaymentHash", "Inbound", "PaymentId");
 
                     b.ToTable("LightningPayments");
                 });
@@ -194,6 +216,15 @@ namespace NLDK.Migrations
                     b.HasIndex("ScriptId");
 
                     b.ToTable("WalletScripts");
+                });
+
+            modelBuilder.Entity("NLDK.ArbitraryData", b =>
+                {
+                    b.HasOne("NLDK.Wallet", "Wallet")
+                        .WithMany("ArbitraryDatas")
+                        .HasForeignKey("WalletId");
+
+                    b.Navigation("Wallet");
                 });
 
             modelBuilder.Entity("NLDK.Channel", b =>
@@ -296,6 +327,8 @@ namespace NLDK.Migrations
 
             modelBuilder.Entity("NLDK.Wallet", b =>
                 {
+                    b.Navigation("ArbitraryDatas");
+
                     b.Navigation("Channels");
 
                     b.Navigation("LightningPayments");

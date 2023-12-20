@@ -1,66 +1,193 @@
-﻿using NBitcoin;
-using org.ldk.enums;
+﻿using System.Net;
+using System.Text;
+using Microsoft.AspNetCore.Connections;
+using NBitcoin;
+using NBitcoin.RPC;
+using NBXplorer;
+using Newtonsoft.Json;
 using org.ldk.structs;
-using EventHandler = org.ldk.structs.EventHandler;
 using Network = NBitcoin.Network;
-using OutPoint = org.ldk.structs.OutPoint;
+using Script = NBitcoin.Script;
+using SocketAddress = org.ldk.structs.SocketAddress;
 using TxOut = NBitcoin.TxOut;
 
 namespace nldksample.LDK;
 
-public class LDKLockableScore: LockableScoreInterface
-{
-    public ScoreLookUp read_lock()
-    {
-        throw new NotImplementedException();
-    }
-
-    public ScoreUpdate write_lock()
-    {
-        throw new NotImplementedException();
-    }
-}
-
 public static class LDKExtensions
 {
+    public static SocketAddress? Endpoint(this EndPoint endPoint)
+    {
+        return SocketAddress.from_str(endPoint.ToString()) switch
+        {
+            org.ldk.structs.Result_SocketAddressSocketAddressParseErrorZ.Result_SocketAddressSocketAddressParseErrorZ_OK ok => ok.res,
+            _ => null
+        };
+    }
+    
     public static IServiceCollection AddLDK(this IServiceCollection services)
     {
         services.AddScoped<CurrentWalletService>();
+        services.AddScoped<KeysManager>(provider => KeysManager.of(provider.GetRequiredService<CurrentWalletService>().Seed, DateTimeOffset.Now.ToUnixTimeSeconds(),
+            RandomUtils.GetInt32()));
+        services.AddScoped(provider => provider.GetRequiredService<KeysManager>().as_EntropySource());
+        services.AddScoped(provider => provider.GetRequiredService<KeysManager>().as_NodeSigner());
+        services.AddScoped<LDKPersister>();
+        services.AddScoped<Persister>(provider =>
+            Persister.new_impl(provider.GetRequiredService<LDKPersister>()));
+        services.AddScoped(provider => UserConfig.with_default());
+        
+        
+        services.AddScoped(provider =>
+        {
+            var feeEstimator = provider.GetRequiredService<FeeEstimator>();
+            var watch = provider.GetRequiredService<Watch>();
+            var broadcasterInterface = provider.GetRequiredService<BroadcasterInterface>();
+            var router = provider.GetRequiredService<Router>();
+            var logger = provider.GetRequiredService<Logger>();
+            var signerProvider = provider.GetRequiredService<SignerProvider>();
+            var userConfig = provider.GetRequiredService<UserConfig>();
+            var entropySource = provider.GetRequiredService<EntropySource>();
+            var nodeSigner = provider.GetRequiredService<NodeSigner>();
+            var chainParameters = provider.GetRequiredService<ChainParameters>();
+            var currentWalletService = provider.GetRequiredService<CurrentWalletService>();
+            var filter = provider.GetRequiredService<Filter>();
+            if (currentWalletService.GetRequired().TryGetValue("ChannelManager", out var channelManagerSerialized))
+            {
+                var channelMonitors = currentWalletService.GetInitialChannelMonitors(entropySource, signerProvider);
+                
+                return ChannelManagerHelper.Load(channelMonitors, channelManagerSerialized, entropySource, signerProvider, nodeSigner,
+                    feeEstimator, watch, broadcasterInterface, router, logger, userConfig, filter);
+            }
+            return  ChannelManager.of(feeEstimator, watch, broadcasterInterface, router, logger,entropySource ,nodeSigner, signerProvider,userConfig,chainParameters,
+                (int) DateTimeOffset.Now.ToUnixTimeSeconds());
+            
+        });
+        services.AddScoped(provider => provider.GetRequiredService<ChannelManager>().as_ChannelMessageHandler());
+        services.AddScoped(provider => provider.GetRequiredService<ChannelManager>().as_OffersMessageHandler());
         services.AddScoped<LDKNode>();
-        services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKNode>());
+        services.AddSingleton(provider => P2PGossipSync.of(provider.GetRequiredService<NetworkGraph>(), Option_UtxoLookupZ.none(), provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger))));
+        services.AddSingleton(provider => GossipSync.p2_p(provider.GetRequiredService<P2PGossipSync>()));
+        services.AddSingleton(provider => DefaultMessageRouter.of());
+        services.AddSingleton(provider => provider.GetRequiredService<P2PGossipSync>().as_RoutingMessageHandler());
+        services.AddSingleton(provider =>  provider.GetRequiredService<DefaultMessageRouter>().as_MessageRouter());
+        services.AddSingleton(provider =>  IgnoringMessageHandler.of().as_CustomOnionMessageHandler());
+        services.AddSingleton(provider =>  IgnoringMessageHandler.of().as_CustomMessageHandler());
+        services.AddScoped<OnionMessenger>(provider => 
+            OnionMessenger.of(
+                provider.GetRequiredService<EntropySource>(), 
+                provider.GetRequiredService<NodeSigner>(), 
+                provider.GetRequiredService<Logger>(),
+                provider.GetRequiredService<MessageRouter>(),
+                provider.GetRequiredService<OffersMessageHandler>(),
+                provider.GetRequiredService<CustomOnionMessageHandler>()));
+        
+        
+        services.AddScoped(provider => provider.GetRequiredService<OnionMessenger>().as_OnionMessageHandler());
+        services.AddScoped<LDKBroadcaster>();
+        services.AddScoped<PeerManager>(provider => PeerManager.of(
+            provider.GetRequiredService<ChannelMessageHandler>(),
+            provider.GetRequiredService<RoutingMessageHandler>(),
+            provider.GetRequiredService<OnionMessageHandler>(),
+            provider.GetRequiredService<CustomMessageHandler>(),
+            DateTime.Now.ToUnixTimestamp(),
+            RandomUtils.GetBytes(32),
+            provider.GetRequiredService<Logger>(),
+            provider.GetRequiredService<NodeSigner>()));
+        services.AddScoped<BroadcasterInterface>(provider =>
+            BroadcasterInterface.new_impl(provider.GetRequiredService<LDKBroadcaster>()));
+        services.AddScoped<LDKCoinSelector>();
+        services.AddScoped<CoinSelectionSource>(provider =>
+            CoinSelectionSource.new_impl(provider.GetRequiredService<LDKCoinSelector>()));
+        services.AddScoped<BumpTransactionEventHandler>(provider =>
+            BumpTransactionEventHandler.of(provider.GetRequiredService<BroadcasterInterface>(),
+                provider.GetRequiredService<CoinSelectionSource>(), provider.GetRequiredService<SignerProvider>(),
+                provider.GetRequiredService<Logger>()));
         services.AddScoped<LDKEventHandler>();
-        services.AddScoped<EventHandler>(provider => EventHandler.new_impl(provider.GetRequiredService<LDKEventHandler>()));
+        services.AddScoped<org.ldk.structs.EventHandler>(provider =>
+            org.ldk.structs.EventHandler.new_impl(provider.GetRequiredService<LDKEventHandler>()));
         services.AddScoped<LDKFeeEstimator>();
-        services.AddScoped<FeeEstimator>(provider => FeeEstimator.new_impl(provider.GetRequiredService<LDKFeeEstimator>()));
+        services.AddScoped<FeeEstimator>(provider =>
+            FeeEstimator.new_impl(provider.GetRequiredService<LDKFeeEstimator>()));
         services.AddScoped<LDKPersistInterface>();
         services.AddScoped<Persist>(provider => Persist.new_impl(provider.GetRequiredService<LDKPersistInterface>()));
         services.AddScoped<LDKSignerProvider>();
-        services.AddScoped<SignerProvider>(provider => SignerProvider.new_impl(provider.GetRequiredService<LDKSignerProvider>()));
+        services.AddScoped<SignerProvider>(provider =>
+            SignerProvider.new_impl(provider.GetRequiredService<LDKSignerProvider>()));
         services.AddScoped<LDKFilter>();
         services.AddScoped<Filter>(provider => Filter.new_impl(provider.GetRequiredService<LDKFilter>()));
-        services.AddScoped<ChainMonitor>(provider => 
+        services.AddScoped<ChainMonitor>(provider =>
             ChainMonitor.of(
-                Option_FilterZ.some(provider.GetRequiredService<Filter>()), 
-                provider.GetRequiredService<BroadcasterInterface>(), 
+                Option_FilterZ.some(provider.GetRequiredService<Filter>()),
+                provider.GetRequiredService<BroadcasterInterface>(),
                 provider.GetRequiredService<Logger>(),
                 provider.GetRequiredService<FeeEstimator>(),
                 provider.GetRequiredService<Persist>()
-                ));
-        services.AddScoped<Watch>( provider => provider.GetRequiredService<ChainMonitor>().as_Watch());
-        services.AddScoped<KeysManager>( provider => provider.GetRequiredService<LDKNode>().KeysManager);
-        services.AddScoped<ChannelManager>( provider => provider.GetRequiredService<LDKNode>().ChannelManager);
+            ));
+        services.AddScoped<Watch>(provider => provider.GetRequiredService<ChainMonitor>().as_Watch());
         services.AddScoped<Filter>(provider => Filter.new_impl(provider.GetRequiredService<LDKFilter>()));
+        services.AddScoped<Confirm, Confirm>(provider => provider.GetRequiredService<ChannelManager>().as_Confirm());
+        services.AddScoped<Confirm, Confirm>(provider => provider.GetRequiredService<ChainMonitor>().as_Confirm());
+        services.AddScoped<LDKChannelSync>();
+        services.AddScoped<LDKBackgroundProcessor>();
+        services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKChannelSync>());
+        services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKBackgroundProcessor>());
+
         services.AddSingleton<LDKLogger>();
-        services.AddSingleton<LockableScore>(provider => LockableScore.new_impl(provider.GetRequiredService<LDKLockableScore>()));
-        services.AddSingleton<Logger>(provider => Logger.new_impl(provider.GetRequiredService<LDKLogger>()));
-        services.AddSingleton<NetworkGraph>(provider => NetworkGraph.of(provider.GetRequiredService<Network>().GetLdkNetwork(), provider.GetRequiredService<Logger>()));
-        services.AddSingleton<DefaultRouter>(provider => DefaultRouter.of(provider.GetRequiredService<NetworkGraph>(), provider.GetRequiredService<Logger>(), RandomUtils.GetBytes(32), provider.GetRequiredService<LockableScore>(),
+        services.AddSingleton<ChainParameters>(provider =>
+        {
+            var explorerClient = provider.GetRequiredService<ExplorerClient>();
+            var info = explorerClient.RPCClient.GetBlockchainInfo();
+            var bestBlock = BestBlock.of(info.BestBlockHash.ToBytes(), (int) info.Blocks);
+            return ChainParameters.of(provider.GetRequiredService<Network>().GetLdkNetwork(), bestBlock);
+        });
+        services.AddSingleton<Score>(provider => provider.GetRequiredService<ProbabilisticScorer>().as_Score());
+         services.AddSingleton<MultiThreadedLockableScore>(provider =>
+            MultiThreadedLockableScore.of(provider.GetRequiredService<Score>()));
+        services.AddSingleton<LockableScore>(provider =>
+            provider.GetRequiredService<MultiThreadedLockableScore>().as_LockableScore());
+        services.AddSingleton<WriteableScore>(provider =>
+            provider.GetRequiredService<MultiThreadedLockableScore>().as_WriteableScore());
+
+        services.AddKeyedSingleton<Logger>(nameof(LDKLogger), (provider, o) => Logger.new_impl(provider.GetRequiredService<LDKLogger>()));
+        services.AddScoped<LDKWalletLogger>();
+        services.AddScoped<Logger>(provider => Logger.new_impl(provider.GetRequiredService<LDKWalletLogger>()));
+        services.AddSingleton<NetworkGraph>(provider =>
+        {
+            var nodeManager = provider.GetRequiredService<LDKNodeManager>();
+            if (nodeManager.Data.TryGetValue("NetworkGraph", out var s))
+            {
+                var result =  NetworkGraph.read(s, provider.GetRequiredService<Logger>());                
+                if(result is Result_NetworkGraphDecodeErrorZ.Result_NetworkGraphDecodeErrorZ_OK ok)
+                    return ok.res;
+            }
+            return NetworkGraph.of(provider.GetRequiredService<Network>().GetLdkNetwork(),
+                provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger)));
+        });
+        
+        services.AddSingleton<ProbabilisticScoringDecayParameters>(provider => ProbabilisticScoringDecayParameters.with_default());
+        services.AddSingleton<ProbabilisticScorer>(provider =>
+        {
+            var nodeManager = provider.GetRequiredService<LDKNodeManager>();
+            var logger = provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger));
+            if (nodeManager.Data.TryGetValue("Score", out var s))
+            {
+                var result =  ProbabilisticScorer.read(s, provider.GetRequiredService<ProbabilisticScoringDecayParameters>(), provider.GetRequiredService<NetworkGraph>(), logger);                
+                if(result is Result_ProbabilisticScorerDecodeErrorZ.Result_ProbabilisticScorerDecodeErrorZ_OK ok)
+                    return ok.res;
+            }
+            
+            return ProbabilisticScorer.of(ProbabilisticScoringDecayParameters.with_default(),
+                provider.GetRequiredService<NetworkGraph>(), logger);
+        });
+        services.AddSingleton<DefaultRouter>(provider => DefaultRouter.of(provider.GetRequiredService<NetworkGraph>(),
+            provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger)), RandomUtils.GetBytes(32),
+            provider.GetRequiredService<LockableScore>(),
             ProbabilisticScoringFeeParameters.with_default()));
         services.AddSingleton<Router>(provider => provider.GetRequiredService<DefaultRouter>().as_Router());
         services.AddSingleton<LDKNodeManager>();
         services.AddHostedService<LDKNodeManager>(provider => provider.GetRequiredService<LDKNodeManager>());
-        
 
+        return services;
     }
 
     public static org.ldk.enums.Network GetLdkNetwork(this Network network)
@@ -74,6 +201,18 @@ public static class LDKExtensions
         };
     }
 
+    public static async Task<GetBlockchainInfoResponse> GetBlockchainInfoAsyncEx(this RPCClient client,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await client.SendCommandAsync("getblockchaininfo", cancellationToken).ConfigureAwait(false);
+        return JsonConvert.DeserializeObject<GetBlockchainInfoResponse>(result.ResultString);
+    }
+
+    public static NBitcoin.Coin Coin(this Input input)
+    {
+        return new NBitcoin.Coin(input.get_outpoint().Outpoint(), input.get_previous_utxo().TxOut());
+    }
+
     public static TxOut TxOut(this org.ldk.structs.TxOut txOut)
     {
         return new TxOut(Money.Satoshis(txOut.value), Script.FromBytesUnsafe(txOut.script_pubkey));
@@ -83,6 +222,16 @@ public static class LDKExtensions
     {
         return new NBitcoin.OutPoint(new uint256(outPoint.get_txid()), outPoint.get_index());
     }
+    public static  org.ldk.structs.OutPoint Outpoint(this NBitcoin.OutPoint  outPoint)
+    {
+        return org.ldk.structs.OutPoint.of(outPoint.Hash.ToBytes(), (short) outPoint.N);
+    }
+    
+    public static org.ldk.structs.TxOut TxOut(this TxOut txOut)
+    {
+        return new org.ldk.structs.TxOut(txOut.Value.Satoshi, txOut.ScriptPubKey.ToBytes());
+    }
+
 
     public static byte[]? GetPreimage(this PaymentPurpose purpose, out byte[]? secret)
     {

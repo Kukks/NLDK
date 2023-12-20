@@ -10,13 +10,13 @@ public class LDKSignerProvider : SignerProviderInterface
 {
     private readonly string _walletId;
     private readonly WalletService _walletService;
-    private readonly SignerProviderInterface _innerSigner;
+    private readonly SignerProvider _innerSigner;
 
-    public LDKSignerProvider(CurrentWalletService currentWalletService, WalletService walletService, SignerProviderInterface innerSigner)
+    public LDKSignerProvider(CurrentWalletService currentWalletService, WalletService walletService, KeysManager innerSigner)
     {
         _walletId = currentWalletService.CurrentWallet;
         _walletService = walletService;
-        _innerSigner = innerSigner;
+        _innerSigner = innerSigner.as_SignerProvider();
     }
 
     public byte[] generate_channel_keys_id(bool inbound, long channel_value_satoshis, UInt128 user_channel_id)

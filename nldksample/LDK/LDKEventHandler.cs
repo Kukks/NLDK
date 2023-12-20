@@ -5,6 +5,7 @@ using NLDK;
 using org.ldk.structs;
 using LightningPayment = NLDK.LightningPayment;
 using Script = NBitcoin.Script;
+using Transaction = NBitcoin.Transaction;
 using TxOut = NBitcoin.TxOut;
 using UInt128 = org.ldk.util.UInt128;
 
@@ -82,9 +83,15 @@ public class LDKEventHandler : EventHandlerInterface
                         Script.FromBytesUnsafe(eventFundingGenerationReady.output_script))
                 };
                 var tx = _walletService.CreateTransaction(_walletId, txOuts, feeRate).GetAwaiter().GetResult();
-
-                _channelManager.funding_transaction_generated(eventFundingGenerationReady.temporary_channel_id,
-                    eventFundingGenerationReady.counterparty_node_id, tx.ToBytes());
+                if (tx is null)
+                {
+                    _channelManager.close_channel(eventFundingGenerationReady.temporary_channel_id, eventFundingGenerationReady.counterparty_node_id);
+                }
+                else
+                {
+                    _channelManager.funding_transaction_generated(eventFundingGenerationReady.temporary_channel_id,
+                        eventFundingGenerationReady.counterparty_node_id, tx.Value.Tx.ToBytes());
+                }
                 break;
             case Event.Event_HTLCHandlingFailed eventHtlcHandlingFailed:
                 break;

@@ -1,36 +1,16 @@
-﻿using NBitcoin;
-using NBXplorer;
-using org.ldk.structs;
-using EventHandler = System.EventHandler;
+﻿using EventHandler = System.EventHandler;
 
 namespace nldksample.LDK;
 
-public class LDKNode : IScopedHostedService, IAsyncDisposable
+public class LDKNode : IAsyncDisposable, IHostedService
 {
     private readonly CurrentWalletService _currentWalletService;
-    private readonly FeeEstimator _feeEstimator;
-    private readonly Watch _watch;
-    private readonly BroadcasterInterface _broadcasterInterface;
-    private readonly Router _router;
-    private readonly Logger _logger;
-    private readonly SignerProvider _signerProvider;
-    private readonly ExplorerClient _explorerClient;
-    private readonly Network _network;
-
-    public LDKNode(IServiceProvider serviceProvider, 
-        CurrentWalletService currentWalletService,
-        FeeEstimator feeEstimator , 
-        Watch watch, BroadcasterInterface broadcasterInterface, Router router, Logger logger, SignerProvider signerProvider, ExplorerClient explorerClient, Network network)
+    private readonly ILogger _logger;
+    public LDKNode(IServiceProvider serviceProvider,
+        CurrentWalletService currentWalletService, LDKWalletLogger logger)
     {
         _currentWalletService = currentWalletService;
-        _feeEstimator = feeEstimator;
-        _watch = watch;
-        _broadcasterInterface = broadcasterInterface;
-        _router = router;
         _logger = logger;
-        _signerProvider = signerProvider;
-        _explorerClient = explorerClient;
-        _network = network;
         ServiceProvider = serviceProvider;
     }
 
@@ -46,37 +26,29 @@ public class LDKNode : IScopedHostedService, IAsyncDisposable
     {
         await _currentWalletService.WalletSelected.Task;
 
+        _logger.LogInformation("Wallet selected, starting LDKNode");
         await Semaphore.WaitAsync(cancellationToken);
         var exists = _started is not null;
         _started ??= new TaskCompletionSource();
         Semaphore.Release();
         if (exists)
         {
+            _logger.LogInformation("LDKNode already started, will not run start again");
             await _started.Task;
             return;
         }
 
-        
-        KeysManager = KeysManager.of(_currentWalletService.Seed, DateTimeOffset.Now.ToUnixTimeSeconds(), RandomUtils.GetInt32());
 
-        var hash = await _explorerClient.RPCClient.GetBestBlockHashAsync(cancellationToken);
-        var height = await _explorerClient.RPCClient.GetBlockchainInfoAsync(cancellationToken);
-        ChannelManager = ChannelManager.of(_feeEstimator, _watch, _broadcasterInterface, _router, _logger,
-            KeysManager.as_EntropySource(), KeysManager.as_NodeSigner(), _signerProvider, UserConfig.with_default(),
-            ChainParameters.of(_network.GetLdkNetwork(), BestBlock.of(hash.ToBytes(), (int) height.Blocks)),
-            (int) DateTimeOffset.Now.ToUnixTimeSeconds());
-        
         var services = ServiceProvider.GetServices<IScopedHostedService>();
+        
+        _logger.LogInformation("Starting LDKNode services" );
         foreach (var service in services)
         {
             await service.StartAsync(cancellationToken);
         }
-
         _started.SetResult();
+        _logger.LogInformation("LDKNode started");
     }
-
-    public KeysManager KeysManager { get; private set; }
-    public ChannelManager ChannelManager { get; private set; }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {

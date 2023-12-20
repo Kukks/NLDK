@@ -9,16 +9,18 @@ namespace nldksample.LDK;
 public class LDKFilter : FilterInterface
 {
     private readonly string _walletId;
+    private readonly CurrentWalletService _currentWalletService;
     private readonly WalletService _walletService;
     private readonly ExplorerClient _explorerClient;
     private readonly WalletTrackedSource _ts;
 
-    public LDKFilter(string walletId, WalletService walletService, ExplorerClient explorerClient)
+    public LDKFilter(CurrentWalletService currentWalletService, WalletService walletService, ExplorerClient explorerClient)
     {
-        _walletId = walletId;
+        _walletId = currentWalletService.CurrentWallet;
+        _currentWalletService = currentWalletService;
         _walletService = walletService;
         _explorerClient = explorerClient;
-        _ts = new WalletTrackedSource(walletId);
+        _ts = new WalletTrackedSource(currentWalletService.CurrentWallet);
     }
 
     public void register_tx(byte[] txid, byte[] script_pubkey)

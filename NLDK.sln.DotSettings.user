@@ -3,4 +3,5 @@
 	<s:String x:Key="/Default/Environment/AssemblyExplorer/XmlDocument/@EntryValue">&lt;AssemblyExplorer&gt;&#xD;
   &lt;Assembly Path="C:\Users\evilk\.nuget\packages\asynckeyedlock\6.2.4\lib\net8.0\AsyncKeyedLock.dll" /&gt;&#xD;
   &lt;Assembly Path="C:\Users\evilk\.nuget\packages\org.ldk\0.0.118-alpha1\lib\net6.0\csharpldk.dll" /&gt;&#xD;
-&lt;/AssemblyExplorer&gt;</s:String></wpf:ResourceDictionary>
+&lt;/AssemblyExplorer&gt;</s:String>
+	</wpf:ResourceDictionary>

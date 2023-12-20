@@ -4,7 +4,18 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NLDK", "NLDK\NLDK.csproj", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "nldksample", "nldksample\nldksample.csproj", "{59429581-B370-4B97-86D5-E958A704CC4E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NBXplorer.Client", "..\NBXplorer\NBXplorer.Client\NBXplorer.Client.csproj", "{6C0589C1-122C-4684-AD15-A4F5519EEA0C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NBXplorer.Client", "NBXplorer\NBXplorer.Client\NBXplorer.Client.csproj", "{F706689D-E476-4592-93C3-6B9F3E5B0193}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NBXplorer", "NBXplorer\NBXplorer\NBXplorer.csproj", "{290CA59F-AD4E-4B07-AA40-B1AA4ECED8CE}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "SolutionFolder1", "SolutionFolder1", "{CB98C0C0-6FD6-40C2-8536-F14646940E7B}"
+	ProjectSection(SolutionItems) = preProject
+		docker-compose.yml = docker-compose.yml
+		docker-bitcoin-cli.ps1 = docker-bitcoin-cli.ps1
+		docker-bitcoin-cli.sh = docker-bitcoin-cli.sh
+		docker-bitcoin-generate.ps1 = docker-bitcoin-generate.ps1
+		docker-bitcoin-generate.sh = docker-bitcoin-generate.sh
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -20,9 +31,13 @@ Global
 		{59429581-B370-4B97-86D5-E958A704CC4E}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{59429581-B370-4B97-86D5-E958A704CC4E}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{59429581-B370-4B97-86D5-E958A704CC4E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{6C0589C1-122C-4684-AD15-A4F5519EEA0C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F706689D-E476-4592-93C3-6B9F3E5B0193}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F706689D-E476-4592-93C3-6B9F3E5B0193}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F706689D-E476-4592-93C3-6B9F3E5B0193}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F706689D-E476-4592-93C3-6B9F3E5B0193}.Release|Any CPU.Build.0 = Release|Any CPU
+		{290CA59F-AD4E-4B07-AA40-B1AA4ECED8CE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{290CA59F-AD4E-4B07-AA40-B1AA4ECED8CE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{290CA59F-AD4E-4B07-AA40-B1AA4ECED8CE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{290CA59F-AD4E-4B07-AA40-B1AA4ECED8CE}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

@@ -1,29 +1,36 @@
 ﻿using NBitcoin;
+using NBXplorer.Models;
 using NLDK;
+using org.ldk.structs;
+using Wallet = NLDK.Wallet;
 
 namespace nldksample.LDK;
 
 public class CurrentWalletService
 {
-    private readonly Network _network;
-    private string? _currentWallet;
-    private Wallet _wallet;
-
-    public CurrentWalletService(Network network)
+    private readonly WalletService _walletService;
+    private Wallet? _wallet;
+    private Dictionary<string, byte[]> _data;
+    public CurrentWalletService(WalletService walletService)
     {
-        _network = network;
+        _walletService = walletService;
     }
     
     public void SetWallet(Wallet wallet)
     {
-        if (_currentWallet is not null)
+        if (_wallet is not null)
         {
             throw new InvalidOperationException("wallet is already selected");
         }
-        _currentWallet = wallet.Id;
         _wallet = wallet;
         Seed = new Mnemonic(_wallet.Mnemonic).DeriveExtKey().Derive(new KeyPath(_wallet.DerivationPath.Replace("/*", ""))).PrivateKey.ToBytes();
-        WalletSelected.SetResult();
+        _walletService.GetArbitraryData(_wallet.Id).ContinueWith(task => 
+        {
+            _data = task.Result.ToDictionary(kv => kv.Key.Replace(_wallet.Id, ""), kv => kv.Value);
+            
+            WalletSelected.SetResult();
+            
+        });
         
     }
 
@@ -33,11 +40,39 @@ public class CurrentWalletService
     {
         get
         {
-            if(_currentWallet is null)
+            if(_wallet is null)
                 throw new InvalidOperationException("No wallet selected");
-            return _currentWallet;
+            return _wallet.Id;
         }
     }
     
     public TaskCompletionSource WalletSelected { get; } = new();
+
+    public bool IsThisWallet(TrackedSource trackedSource)
+    {
+        if(trackedSource is WalletTrackedSource wts)
+            return wts.WalletId == CurrentWallet;
+        return _wallet.AliasWalletName.Contains(trackedSource.ToString());
+    }
+
+    private ChannelMonitor[]? _channels = null;
+    private readonly SemaphoreSlim _ss = new(1,1);
+    public ChannelMonitor[] GetInitialChannelMonitors(EntropySource entropySource, SignerProvider signerProvider)
+    {
+        _ss.Wait();
+
+        if (_channels is null)
+        {
+            var data = _wallet.Channels?.Select(c => c.Data)?.ToArray() ?? Array.Empty<byte[]>();
+            _channels =  ChannelManagerHelper.GetInitialMonitors(data, entropySource, signerProvider);
+        }
+        _ss.Release();
+        return _channels;
+    }
+
+    public Dictionary<string, byte[]> GetRequired()
+    {
+        return _data;
+    }
+    
 }

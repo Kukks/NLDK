@@ -7,21 +7,32 @@ public class NBXListener:IHostedService
 {
     private readonly ExplorerClient _explorerClient;
     private readonly WalletService _walletService;
+    private readonly ILogger<NBXListener> _logger;
     private WebsocketNotificationSession _session;
 
-    public NBXListener(ExplorerClient explorerClient, WalletService walletService)
+    public NBXListener(ExplorerClient explorerClient, WalletService walletService, ILogger<NBXListener> logger)
     {
         _explorerClient = explorerClient;
         _walletService = walletService;
+        _logger = logger;
     }
+    
+    public event EventHandler<NewBlockEvent>? NewBlock;
+    public event EventHandler<(TrackedSource TrackedSource, TransactionInformation TransactionInformation)>? TransactionUpdate;
     
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        await _explorerClient.WaitServerStartedAsync(cancellationToken);
-        _session = await _explorerClient.CreateWebsocketNotificationSessionAsync(cancellationToken);
-        await _session.ListenAllTrackedSourceAsync(cancellation: cancellationToken);
-        await _session.ListenNewBlockAsync(cancellation: cancellationToken);
-        _ = Loop(_session, cancellationToken);
+       Task.Run(async () =>
+        {
+            _logger.LogInformation("Waiting for NBXplorer to start...");
+            await _explorerClient.WaitServerStartedAsync(cancellationToken);
+            _session = await _explorerClient.CreateWebsocketNotificationSessionAsync(cancellationToken);
+            await _session.ListenAllTrackedSourceAsync(cancellation: cancellationToken);
+            await _session.ListenNewBlockAsync(cancellation: cancellationToken);
+            _ = Loop(_session, cancellationToken);
+            
+            _logger.LogInformation("NBXplorer started");
+        }, cancellationToken);
     }
 
     private async Task Loop(WebsocketNotificationSession session, CancellationToken cancellationToken)
@@ -48,6 +59,7 @@ public class NBXListener:IHostedService
                             transaction.BlockHash = tx.BlockId == uint256.Zero ? null : tx.BlockId?.ToString();
                         });
                     }, cancellationToken);
+                    NewBlock?.Invoke(this, newBlockEvent);
                     break;
                 case NewTransactionEvent newTransactionEvent:
                     
@@ -59,10 +71,10 @@ public class NBXListener:IHostedService
                         continue;
                     
                     await _walletService.OnTransactionSeen(w, tx, cancellationToken);
+                    TransactionUpdate?.Invoke(this, (newTransactionEvent.TrackedSource, tx));
                     break;
             }
         }
-        
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)

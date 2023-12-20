@@ -1,6 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection.Extensions;
-using NBitcoin;
+﻿using NBitcoin;
 using NLDK;
 using org.ldk.enums;
 using org.ldk.structs;

@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -73,7 +74,7 @@ namespace NLDK.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "TransactionScript",
+                name: "TransactionScripts",
                 columns: table => new
                 {
                     TransactionHash = table.Column<string>(type: "TEXT", nullable: false),
@@ -82,18 +83,61 @@ namespace NLDK.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_TransactionScript", x => new { x.ScriptId, x.TransactionHash });
+                    table.PrimaryKey("PK_TransactionScripts", x => new { x.ScriptId, x.TransactionHash });
                     table.ForeignKey(
-                        name: "FK_TransactionScript_Scripts_ScriptId",
+                        name: "FK_TransactionScripts_Scripts_ScriptId",
                         column: x => x.ScriptId,
                         principalTable: "Scripts",
                         principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                     table.ForeignKey(
-                        name: "FK_TransactionScript_Transactions_TransactionHash",
+                        name: "FK_TransactionScripts_Transactions_TransactionHash",
                         column: x => x.TransactionHash,
                         principalTable: "Transactions",
                         principalColumn: "Hash",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "ArbitraryData",
+                columns: table => new
+                {
+                    Key = table.Column<string>(type: "TEXT", nullable: false),
+                    Value = table.Column<byte[]>(type: "BLOB", nullable: false),
+                    WalletId = table.Column<string>(type: "TEXT", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_ArbitraryData", x => x.Key);
+                    table.ForeignKey(
+                        name: "FK_ArbitraryData_Wallets_WalletId",
+                        column: x => x.WalletId,
+                        principalTable: "Wallets",
+                        principalColumn: "Id");
+                });
+
+            migrationBuilder.CreateTable(
+                name: "LightningPayments",
+                columns: table => new
+                {
+                    PaymentHash = table.Column<string>(type: "TEXT", nullable: false),
+                    PaymentId = table.Column<string>(type: "TEXT", nullable: false),
+                    WalletId = table.Column<string>(type: "TEXT", nullable: false),
+                    Inbound = table.Column<bool>(type: "INTEGER", nullable: false),
+                    Preimage = table.Column<string>(type: "TEXT", nullable: true),
+                    Secret = table.Column<string>(type: "TEXT", nullable: true),
+                    Timestamp = table.Column<DateTimeOffset>(type: "TEXT", nullable: false),
+                    Value = table.Column<long>(type: "INTEGER", nullable: false),
+                    Status = table.Column<int>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_LightningPayments", x => new { x.WalletId, x.PaymentHash, x.Inbound, x.PaymentId });
+                    table.ForeignKey(
+                        name: "FK_LightningPayments_Wallets_WalletId",
+                        column: x => x.WalletId,
+                        principalTable: "Wallets",
+                        principalColumn: "Id",
                         onDelete: ReferentialAction.Cascade);
                 });
 
@@ -126,15 +170,15 @@ namespace NLDK.Migrations
                 name: "Channels",
                 columns: table => new
                 {
-                    Id = table.Column<string>(type: "TEXT", nullable: false),
+                    FundingTransactionHash = table.Column<string>(type: "TEXT", nullable: false),
+                    FundingTransactionOutputIndex = table.Column<int>(type: "INTEGER", nullable: false),
                     WalletId = table.Column<string>(type: "TEXT", nullable: false),
                     Data = table.Column<byte[]>(type: "BLOB", nullable: false),
-                    FundingTransactionHash = table.Column<string>(type: "TEXT", nullable: false),
-                    FundingTransactionOutputIndex = table.Column<int>(type: "INTEGER", nullable: false)
+                    SpendableData = table.Column<byte[]>(type: "BLOB", nullable: true)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Channels", x => new { x.Id, x.WalletId });
+                    table.PrimaryKey("PK_Channels", x => new { x.WalletId, x.FundingTransactionHash, x.FundingTransactionOutputIndex });
                     table.ForeignKey(
                         name: "FK_Channels_Coins_FundingTransactionHash_FundingTransactionOutputIndex",
                         columns: x => new { x.FundingTransactionHash, x.FundingTransactionOutputIndex },
@@ -150,15 +194,14 @@ namespace NLDK.Migrations
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Channels_FundingTransactionHash_FundingTransactionOutputIndex",
-                table: "Channels",
-                columns: new[] { "FundingTransactionHash", "FundingTransactionOutputIndex" },
-                unique: true);
+                name: "IX_ArbitraryData_WalletId",
+                table: "ArbitraryData",
+                column: "WalletId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Channels_WalletId",
+                name: "IX_Channels_FundingTransactionHash_FundingTransactionOutputIndex",
                 table: "Channels",
-                column: "WalletId");
+                columns: new[] { "FundingTransactionHash", "FundingTransactionOutputIndex" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Coins_ScriptId",
@@ -166,8 +209,8 @@ namespace NLDK.Migrations
                 column: "ScriptId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_TransactionScript_TransactionHash",
-                table: "TransactionScript",
+                name: "IX_TransactionScripts_TransactionHash",
+                table: "TransactionScripts",
                 column: "TransactionHash");
 
             migrationBuilder.CreateIndex(
@@ -180,10 +223,16 @@ namespace NLDK.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
+                name: "ArbitraryData");
+
+            migrationBuilder.DropTable(
                 name: "Channels");
 
             migrationBuilder.DropTable(
-                name: "TransactionScript");
+                name: "LightningPayments");
+
+            migrationBuilder.DropTable(
+                name: "TransactionScripts");
 
             migrationBuilder.DropTable(
                 name: "WalletScripts");

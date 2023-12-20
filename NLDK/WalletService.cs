@@ -3,276 +3,8 @@ using BTCPayServer.Lightning;
 using Microsoft.EntityFrameworkCore;
 using NBitcoin;
 using NBXplorer.Models;
-using org.ldk.util;
 
 namespace NLDK;
-
-public interface BaseEntity
-{
-    static abstract void OnModelCreating(ModelBuilder modelBuilder);
-}
-
-public class Wallet : BaseEntity
-{
-    public string Id { get; set; }
-    public string[] AliasWalletName { get; set; }
-    public string Name { get; set; }
-    public string Mnemonic { get; set; }
-    public string DerivationPath { get; set; }
-    public uint LastDerivationIndex { get; set; }
-    public string CreationBlockHash { get; set; }
-    public List<WalletScript> Scripts { get; } = new();
-    public List<Channel> Channels { get; } = new();
-    public List<LightningPayment> LightningPayments { get; set; }
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Wallet>()
-            .HasKey(w => w.Id);
-
-        modelBuilder.Entity<Wallet>()
-            .HasMany(w => w.Scripts)
-            .WithOne(script => script.Wallet)
-            .HasForeignKey(script => script.WalletId);
-
-
-        modelBuilder.Entity<Wallet>()
-            .HasMany(w => w.Channels)
-            .WithOne(script => script.Wallet)
-            .HasForeignKey(coin => coin.WalletId);
-
-        modelBuilder.Entity<Wallet>()
-            .HasMany(w => w.LightningPayments)
-            .WithOne(script => script.Wallet)
-            .HasForeignKey(coin => coin.WalletId);
-    }
-}
-
-public class LightningPayment: BaseEntity
-{
-    public string PaymentHash { get; set; }
-    public string? PaymentId { get; set; }
-    public string? Preimage { get; set; }
-    public string? Secret { get; set; }
-    public string WalletId { get; set; }
-    public bool Inbound { get; set; }
-    public DateTimeOffset Timestamp { get; set; }
-    public long Value { get; set; }
-    public Wallet Wallet { get; set; }
-    public LightningPaymentStatus Status { get; set; }
-
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<LightningPayment>()
-            .HasKey(w => new {w.WalletId, w.PaymentHash, w.Inbound, w.PaymentId});
-        modelBuilder.Entity<LightningPayment>()
-            .HasOne(w => w.Wallet)
-            .WithMany(wallet => wallet.LightningPayments)
-            .HasForeignKey(w => w.WalletId);
-    }
-}
-
-public class WalletScript : BaseEntity
-{
-    public string WalletId { get; set; }
-    public string ScriptId { get; set; }
-    public string? DerivationPath { get; set; }
-    public Script Script { get; set; }
-    public Wallet Wallet { get; set; }
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<WalletScript>()
-            .HasKey(w => new {w.WalletId, w.ScriptId});
-
-        modelBuilder.Entity<WalletScript>()
-            .HasOne(w => w.Script)
-            .WithMany(script => script.WalletScripts)
-            .HasForeignKey(w => w.ScriptId);
-
-        modelBuilder.Entity<WalletScript>()
-            .HasOne(w => w.Wallet)
-            .WithMany(wallet => wallet.Scripts)
-            .HasForeignKey(w => w.WalletId);
-    }
-}
-
-public class Script : BaseEntity
-{
-    public string Id { get; set; }
-
-    public List<Transaction> Transactions { get; set; }
-    public List<WalletScript> WalletScripts { get; set; }
-    public List<Coin> Coins { get; set; }
-    public List<TransactionScript>? TransactionScripts { get; set; }
-
-    public object GetKey()
-    {
-        return Id;
-    }
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Script>()
-            .HasKey(w => w.Id);
-        modelBuilder.Entity<Script>()
-            .HasMany(w => w.Transactions)
-            .WithMany(transaction => transaction.Scripts);
-        modelBuilder.Entity<Script>()
-            .HasMany<WalletScript>(script => script.WalletScripts)
-            .WithOne(ws => ws.Script)
-            .HasForeignKey(ws => ws.ScriptId);
-        modelBuilder.Entity<Script>()
-            .HasMany<Coin>(script => script.Coins)
-            .WithOne(coin => coin.Script);
-    }
-    
-    public NBitcoin.Script ToScript()
-    {
-        return NBitcoin.Script.FromHex(Id);
-    } 
-}
-
-public class Transaction : BaseEntity
-{
-    public string Hash { get; set; }
-    public string? BlockHash { get; set; }
-
-    public List<Script> Scripts { get; set; }
-    public List<TransactionScript> TransactionScripts { get; set; }
-
-    public object GetKey()
-    {
-        return Hash;
-    }
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Transaction>()
-            .HasKey(w => w.Hash);
-        modelBuilder.Entity<Transaction>()
-            .HasMany(w => w.Scripts)
-            .WithMany(script => script.Transactions)
-            .UsingEntity<TransactionScript>(builder =>
-                    builder
-                        .HasOne(ts => ts.Script)
-                        .WithMany(script => script.TransactionScripts),
-                builder => builder
-                    .HasOne(ts => ts.Transaction)
-                    .WithMany(transaction => transaction.TransactionScripts));
-    }
-}
-
-public class TransactionScript
-{
-    public string TransactionHash { get; set; }
-    public string ScriptId { get; set; }
-    public bool Spent { get; set; }
-
-    public Transaction Transaction { get; set; }
-    public Script Script { get; set; }
-}
-
-public class Coin : BaseEntity
-{
-    public string FundingTransactionHash { get; set; }
-    public int FundingTransactionOutputIndex { get; set; }
-    public string ScriptId { get; set; }
-    public decimal Value { get; set; }
-    public string? SpendingTransactionHash { get; set; }
-    public int? SpendingTransactionInputIndex { get; set; }
-
-    public List<Channel> Channels { get; set; }
-    public Script Script { get; set; }
-
-    public object GetKey()
-    {
-        return new {FundingTransactionHash, FundingTransactionOutputIndex};
-    }
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Coin>()
-            .HasKey(w => new {w.FundingTransactionHash, w.FundingTransactionOutputIndex});
-        modelBuilder.Entity<Coin>()
-            .HasMany(w => w.Channels)
-            .WithOne(channel => channel.Coin)
-            .HasForeignKey(channel => new
-                {channel.FundingTransactionHash, channel.FundingTransactionOutputIndex});
-        modelBuilder.Entity<Coin>()
-            .HasOne(w => w.Script)
-            .WithMany(script => script.Coins)
-            .HasForeignKey(w => w.ScriptId);
-    }
-}
-
-public class Channel : BaseEntity
-{
-    public byte[] Data { get; set; }
-
-    public string FundingTransactionHash { get; set; }
-    public int FundingTransactionOutputIndex { get; set; }
-    public string WalletId { get; set; }
-    public Coin Coin { get; set; }
-    public Wallet? Wallet { get; set; }
-    
-    public byte[]? SpendableData { get; set; }
-
-    public static void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        modelBuilder.Entity<Channel>()
-            .HasKey(w => new {w.WalletId, w.FundingTransactionHash, w.FundingTransactionOutputIndex});
-        modelBuilder.Entity<Channel>()
-            .HasOne(w => w.Coin)
-            .WithMany(coin => coin.Channels)
-            .HasForeignKey(channel => new
-                {channel.FundingTransactionHash, channel.FundingTransactionOutputIndex});
-        modelBuilder.Entity<Channel>()
-            .HasOne(w => w.Wallet)
-            .WithMany(wallet => wallet.Channels)
-            .HasForeignKey(w => w.WalletId);
-    }
-}
-
-public class WalletContext : DbContext
-{
-    public DbSet<Channel> Channels { get; set; }
-    public DbSet<Coin> Coins { get; set; }
-    public DbSet<Wallet> Wallets { get; set; }
-    public DbSet<Transaction> Transactions { get; set; }
-    public DbSet<TransactionScript> TransactionScripts { get; set; }
-    public DbSet<WalletScript> WalletScripts { get; set; }
-    public DbSet<Script> Scripts { get; set; }
-    public DbSet<LightningPayment> LightningPayments { get; set; }
-
-    // public string DbPath { get; }
-
-    public WalletContext()
-    {
-        
-    }
-    
-    override protected void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
-    {
-        optionsBuilder.UseSqlite("Data Source=wallet.db");
-    }
-    public WalletContext(DbContextOptions options) : base(options)
-    {
-    }
-
-    protected override void OnModelCreating(ModelBuilder modelBuilder)
-    {
-        base.OnModelCreating(modelBuilder);
-        var models = modelBuilder.Model.GetEntityTypes()
-            .Where(e => typeof(BaseEntity).IsAssignableFrom(e.ClrType)).ToArray();
-        foreach (var entityType in models )
-        {
-            var method = entityType.ClrType.GetMethod(nameof(BaseEntity.OnModelCreating));
-            method?.Invoke(null, new object[] {modelBuilder});
-        }
-    }
-}
 
 public class WalletService
 {
@@ -307,7 +39,7 @@ public class WalletService
         return await WalletQueryable(context.Wallets).FirstOrDefaultAsync(
             wallet => wallet.Id == walletId || wallet.AliasWalletName.Contains(walletId), cancellationToken);
     }  
-    public async Task<List<Wallet>> GetAll(CancellationToken cancellationToken = default)
+    public async Task<List<Wallet>> GetAll(CancellationToken cancellationToken = default )
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         return await WalletQueryable(context.Wallets).ToListAsync(cancellationToken);
@@ -473,9 +205,34 @@ public class WalletService
 
     public async Task AddOrUpdateChannel(Channel channel, CancellationToken cancellationToken = default)
     {
-        
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         await context.Channels.Upsert(channel).RunAsync(cancellationToken);
+    }    
+    public async Task AddOrUpdateArbitraryData(string? walletId, string key, byte[]? value, CancellationToken cancellationToken = default)
+    { 
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        if (value is null)
+        {
+            try
+            {
+                context.ArbitraryData.Remove(new ArbitraryData()
+                {
+                    Key = walletId+key
+                });
+                await context.SaveChangesAsync(cancellationToken);
+                return;
+            }
+            catch (DbUpdateException e)
+            {
+                return;
+            }
+        }
+        await context.ArbitraryData.Upsert(new ArbitraryData()
+        {
+            WalletId = walletId,
+            Key = walletId+key,
+            Value = value
+        }).RunAsync(cancellationToken);
     }
 
     public async Task TrackScript(string walletId, NBitcoin.Script script, CancellationToken cancellationToken = default)
@@ -502,10 +259,10 @@ public class WalletService
     public async Task AddSpendableToCoin(string walletId, (OutPoint outpoint, TxOut txOut, byte[] write)[] set, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-       await context.Scripts.UpsertRange(set.Select( tuple => new Script()
-       {
-           Id = tuple.txOut.ScriptPubKey.ToHex()
-       })).NoUpdate().RunAsync(cancellationToken);
+        await context.Scripts.UpsertRange(set.Select( tuple => new Script()
+        {
+            Id = tuple.txOut.ScriptPubKey.ToHex()
+        })).NoUpdate().RunAsync(cancellationToken);
        
         await context.WalletScripts.UpsertRange(set.Select(tuple => new WalletScript()
         {
@@ -538,12 +295,14 @@ public class WalletService
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         await context.LightningPayments.Upsert(lightningPayment).RunAsync(cancellationToken);
     }
-
-    public async Task<NBitcoin.Transaction> CreateTransaction(string walletId, List<TxOut> txOuts, FeeRate feeRate, CancellationToken cancellationToken = default)
+    
+    
+    public async Task<(NBitcoin.Transaction Tx, ICoin[] SpentCoins, NBitcoin.Script Change)?> CreateTransaction(string walletId, List<TxOut> txOuts, FeeRate feeRate, List<NBitcoin.Coin>? explicitIns = null, CancellationToken cancellationToken = default)
     {
-        
-        var txBuilder = _network.CreateTransactionBuilder();
-        var script = await DeriveScript(walletId, cancellationToken);
+
+        var changeScript = (await DeriveScript(walletId, cancellationToken)).ToScript();
+        var txBuilder = _network.CreateTransactionBuilder().SetChange(changeScript)
+            .SendEstimatedFees(feeRate);
 
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
         //fetch all coins that are not spent associated with this wallet
@@ -554,11 +313,42 @@ public class WalletService
         var wallet = await context.Wallets.FindAsync(walletId);
         
         var mnemonic = new Mnemonic(wallet!.Mnemonic).DeriveExtKey()!;
+        NBitcoin.Transaction? tx;
+        if (!txOuts.Any() && explicitIns?.Any() is true)
+        {
+            txBuilder.AddCoins(explicitIns.ToArray());
+
+            txBuilder.SendAllRemainingToChange();
+            while (coinsByWalletScript.Any())
+            {
+                try
+                {
+                    tx = txBuilder.BuildTransaction(true);
+                    return (tx, txBuilder.FindSpentCoins(tx), changeScript);
+                }
+                catch (NotEnoughFundsException e)
+                {
+                    var scriptSet = coinsByWalletScript.First();
+                    var newCoin = scriptSet.Value.First();
+                    var key = mnemonic.Derive(KeyPath.Parse(scriptSet.Key.DerivationPath));
+                    txBuilder.AddCoins(newCoin.AsCoin());
+                    txBuilder.AddKeys(key);
+                    scriptSet.Value.Remove(newCoin);
+                    if(scriptSet.Value.Count == 0)
+                        coinsByWalletScript.Remove(scriptSet.Key);
+                }
+            }
+
+            return null;
+        }
+
         txBuilder = coinsByWalletScript.Aggregate(txBuilder, (current, keysAndCoin) => current.AddKeys(mnemonic.Derive(KeyPath.Parse(keysAndCoin.Key.DerivationPath))).AddCoins(keysAndCoin.Value.Select(coin => new NBitcoin.Coin(uint256.Parse(coin.FundingTransactionHash), (uint) coin.FundingTransactionOutputIndex, Money.Coins(coin.Value), NBitcoin.Script.FromHex(coin.ScriptId)))));
         txBuilder = txOuts.Aggregate(txBuilder, (current, c )=> current.Send(c.ScriptPubKey, c.Value));   
-        return txBuilder
-            .SetChange(NBitcoin.Script.FromHex(script.Id))
-            .SendEstimatedFees(feeRate).BuildTransaction(true);
+         
+        tx = txBuilder.BuildTransaction(true);
+        
+        return (tx, txBuilder.FindSpentCoins(tx), changeScript);
+
     }
 
     public async Task PaymentUpdate( string walletId, string paymentHssh, bool inbound, string paymentId, bool failure, string? preimage, CancellationToken cancellationToken = default)
@@ -578,5 +368,38 @@ public class WalletService
             }
         }
         await context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<NBitcoin.Transaction> SignTransaction(string walletId, NBitcoin.Transaction tx1, CancellationToken cancellationToken = default)
+    {
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+
+        var outpointsToMatch = tx1.Inputs.Select(input => input.PrevOut).ToArray();
+        //fetch all coins that are not spent associated with this wallet
+        var coins = await context.Coins.Include(coin => coin.Script)
+            .ThenInclude(script1 => script1.WalletScripts)
+            .Where(coin => 
+                outpointsToMatch.Any(point => point.Hash.ToString() == coin.FundingTransactionHash && point.N == coin.FundingTransactionOutputIndex) && 
+                coin.Script.WalletScripts.Any(
+                    walletScript => walletScript.WalletId == walletId && 
+                                    walletScript.DerivationPath != null && 
+                                    coin.SpendingTransactionHash == null))
+            .ToListAsync(cancellationToken: cancellationToken);
+        //group coins by walletscript
+        var coinsByWalletScript = coins.GroupBy(coin => coin.Script.WalletScripts.First(walletScript => walletScript.WalletId == walletId && walletScript.DerivationPath != null)).ToDictionary(grouping => grouping.Key, grouping => grouping.ToList());
+      
+        var txBuilder = _network.CreateTransactionBuilder();
+        var wallet = await context.Wallets.FindAsync(walletId);
+        
+        var mnemonic = new Mnemonic(wallet!.Mnemonic).DeriveExtKey()!;
+        txBuilder = coinsByWalletScript.Aggregate(txBuilder, (current, keysAndCoin) => current.AddKeys(mnemonic.Derive(KeyPath.Parse(keysAndCoin.Key.DerivationPath))).AddCoins(keysAndCoin.Value.Select(coin => new NBitcoin.Coin(uint256.Parse(coin.FundingTransactionHash), (uint) coin.FundingTransactionOutputIndex, Money.Coins(coin.Value), NBitcoin.Script.FromHex(coin.ScriptId)))));
+        return txBuilder.SignTransactionInPlace(tx1);
+    }
+
+    public async Task<Dictionary<string, byte[]>> GetArbitraryData(string? walletId, CancellationToken cancellationToken = default)
+    {
+
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        return await context.ArbitraryData.Where(data => data.WalletId == walletId ).ToDictionaryAsync(data => data.Key, data => data.Value, cancellationToken);
     }
 }
