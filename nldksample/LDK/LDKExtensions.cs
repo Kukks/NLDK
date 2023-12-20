@@ -65,7 +65,7 @@ public static class LDKExtensions
         services.AddScoped(provider => provider.GetRequiredService<ChannelManager>().as_ChannelMessageHandler());
         services.AddScoped(provider => provider.GetRequiredService<ChannelManager>().as_OffersMessageHandler());
         services.AddScoped<LDKNode>();
-        services.AddSingleton(provider => P2PGossipSync.of(provider.GetRequiredService<NetworkGraph>(), Option_UtxoLookupZ.none(), provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger))));
+        services.AddSingleton(provider => P2PGossipSync.of(provider.GetRequiredService<NetworkGraph>(), Option_UtxoLookupZ.none(), provider.GetGlobalLDKLogger()));
         services.AddSingleton(provider => GossipSync.p2_p(provider.GetRequiredService<P2PGossipSync>()));
         services.AddSingleton(provider => DefaultMessageRouter.of());
         services.AddSingleton(provider => provider.GetRequiredService<P2PGossipSync>().as_RoutingMessageHandler());
@@ -106,6 +106,7 @@ public static class LDKExtensions
         services.AddScoped<org.ldk.structs.EventHandler>(provider =>
             org.ldk.structs.EventHandler.new_impl(provider.GetRequiredService<LDKEventHandler>()));
         services.AddScoped<LDKFeeEstimator>();
+        services.AddScoped<LDKWalletLoggerFactory>();
         services.AddScoped<FeeEstimator>(provider =>
             FeeEstimator.new_impl(provider.GetRequiredService<LDKFeeEstimator>()));
         services.AddScoped<LDKPersistInterface>();
@@ -156,19 +157,19 @@ public static class LDKExtensions
             var nodeManager = provider.GetRequiredService<LDKNodeManager>();
             if (nodeManager.Data.TryGetValue("NetworkGraph", out var s))
             {
-                var result =  NetworkGraph.read(s, provider.GetRequiredService<Logger>());                
+                var result =  NetworkGraph.read(s, provider.GetGlobalLDKLogger());                
                 if(result is Result_NetworkGraphDecodeErrorZ.Result_NetworkGraphDecodeErrorZ_OK ok)
                     return ok.res;
             }
             return NetworkGraph.of(provider.GetRequiredService<Network>().GetLdkNetwork(),
-                provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger)));
+                provider.GetGlobalLDKLogger());
         });
         
         services.AddSingleton<ProbabilisticScoringDecayParameters>(provider => ProbabilisticScoringDecayParameters.with_default());
         services.AddSingleton<ProbabilisticScorer>(provider =>
         {
             var nodeManager = provider.GetRequiredService<LDKNodeManager>();
-            var logger = provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger));
+            var logger = provider.GetGlobalLDKLogger();
             if (nodeManager.Data.TryGetValue("Score", out var s))
             {
                 var result =  ProbabilisticScorer.read(s, provider.GetRequiredService<ProbabilisticScoringDecayParameters>(), provider.GetRequiredService<NetworkGraph>(), logger);                
@@ -180,7 +181,7 @@ public static class LDKExtensions
                 provider.GetRequiredService<NetworkGraph>(), logger);
         });
         services.AddSingleton<DefaultRouter>(provider => DefaultRouter.of(provider.GetRequiredService<NetworkGraph>(),
-            provider.GetRequiredKeyedService<Logger>(nameof(LDKLogger)), RandomUtils.GetBytes(32),
+            provider.GetGlobalLDKLogger(), RandomUtils.GetBytes(32),
             provider.GetRequiredService<LockableScore>(),
             ProbabilisticScoringFeeParameters.with_default()));
         services.AddSingleton<Router>(provider => provider.GetRequiredService<DefaultRouter>().as_Router());
@@ -199,6 +200,12 @@ public static class LDKExtensions
             { } cn when cn == ChainName.Regtest => org.ldk.enums.Network.LDKNetwork_Regtest,
             _ => throw new NotSupportedException()
         };
+    }
+
+
+    public static Logger GetGlobalLDKLogger(this IServiceProvider serviceProvider)
+    {
+        return serviceProvider.GetRequiredKeyedService<Logger>(nameof(LDKLogger));
     }
 
     public static async Task<GetBlockchainInfoResponse> GetBlockchainInfoAsyncEx(this RPCClient client,

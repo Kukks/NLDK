@@ -1,6 +1,7 @@
 ﻿@using NLDK
 
 @inject WalletService WalletService
+@inject NBXListener NBXListener
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">nldksample</a>
@@ -27,6 +28,7 @@
                 </div>
             }
         }
+        <div  class="nav-item px-3 text-light">NBX:@(Connected? "Connected":"waiting to connect/sync") </div>
     </nav>
 </div>
 
@@ -34,8 +36,16 @@
 {
     private List<Wallet> _wallets;
 
+    public bool Connected { get; set; }
+    
     protected override async Task OnInitializedAsync()
     {
+        _  = NBXListener.ConnectedAndSynced.Task.ContinueWith(t =>
+        {
+            Connected = true;
+            InvokeAsync(StateHasChanged);
+        });
+        
         _wallets = await WalletService.GetAll();
         await base.OnInitializedAsync();
     }

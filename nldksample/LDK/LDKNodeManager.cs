@@ -32,10 +32,10 @@ public class LDKNodeManager : IHostedService, IDisposable
     public async Task<LDKNode> GetLDKNodeForWallet(Wallet wallet, CancellationToken cancellationToken = default)
     {
         
-        _logger.LogInformation($"Creating LDKNode for wallet {wallet.Id}");
-     
         var result = Nodes.GetOrAdd(wallet.Id, s =>
         {
+            _logger.LogInformation($"Creating LDKNode for wallet {wallet.Id}");
+
             var scope = _serviceScopeFactory.CreateScope();
             
             _logger.LogInformation($"Scope for wallet {wallet.Id} created");
