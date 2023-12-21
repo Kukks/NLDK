@@ -99,9 +99,10 @@ public class LDKChannelSync : IScopedHostedService
             latestheader = await _explorerClient.RPCClient.GetBlockHeaderAsync(latest.BestBlockHash, cancellationToken);
         }
 
+        var headerBytes = latestheader.ToBytes();
         foreach (var confirm in _confirms)
         {
-            confirm.best_block_updated(latestheader.ToBytes(), latest.Blocks);
+            confirm.best_block_updated(headerBytes, latest.Blocks);
         }
 
         var monitors = _currentWalletService.GetInitialChannelMonitors(null, null);

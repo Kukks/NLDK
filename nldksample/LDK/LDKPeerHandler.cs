@@ -90,7 +90,7 @@ public class LDKPeerHandler : IScopedHostedService
 
         listener.Bind(ip);
         listener.Listen(100);
-        Endpoint = listener.LocalEndPoint ?? new IPEndPoint(IPAddress.Loopback,
+        Endpoint = new IPEndPoint(IPAddress.Loopback,
             int.Parse(listener.LocalEndPoint.ToEndpointString().Split(":").Last()));
         _logger.LogInformation($"Started listening on {Endpoint}");
         while (!cancellationToken.IsCancellationRequested)
@@ -134,6 +134,9 @@ public class LDKPeerHandler : IScopedHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        _cts?.Cancel();
+        if(_cts is not null)
+            await _cts.CancelAsync();
+        
+        _peerManager.disconnect_all_peers();
     }
 }
