@@ -17,7 +17,11 @@ var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
 builder.Services
     .AddHostedService<MigratonHostedService>()
     .AddHostedService<NBXListener>(provider => provider.GetRequiredService<NBXListener>())
-    .AddSingleton<AsyncKeyedLocker<string>>()
+    .AddSingleton(new AsyncKeyedLocker<string>(o =>
+    {
+        o.PoolSize = 20;
+        o.PoolInitialFill = 1;
+    }))
     .AddSingleton<WalletService>()
     .AddLDK()
     .AddSingleton<NBXListener>()
