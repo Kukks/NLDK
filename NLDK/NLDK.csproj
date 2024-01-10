@@ -22,7 +22,7 @@
 
 
     <ItemGroup>
-      <ProjectReference Include="..\..\NBXplorer\NBXplorer.Client\NBXplorer.Client.csproj" />
+      <ProjectReference Include="..\NBXplorer\NBXplorer.Client\NBXplorer.Client.csproj" />
     </ItemGroup>
 
 </Project>
