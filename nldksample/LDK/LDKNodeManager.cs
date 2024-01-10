@@ -1,9 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using NBitcoin;
 using NBXplorer;
 using NLDK;
-using org.ldk.structs;
 using Wallet = NLDK.Wallet;
 
 namespace nldksample.LDK;

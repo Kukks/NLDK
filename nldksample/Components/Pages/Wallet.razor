@@ -51,12 +51,25 @@ else
         <button @onclick="ConnectToPeer">Connect to peer</button>
         if (_node.NodeInfo is not null)
         {
-            <div>Node Info: @_node.NodeInfo.ToString()</div>
+            <div>Node Info: <input type="text" readonly="readonly" value="@_node.NodeInfo.ToString()"/></div>
         }
         else
         {
             <div>Pubkey: @_node.NodeId.ToString()</div>
         }
+        
+        
+        
+        var channelManager = _node.ServiceProvider.GetService<ChannelManager>();
+        <ul>
+            <li>Channels</li>
+            @foreach (var channel in channelManager.list_channels())
+            {
+                <li>@Convert.ToHexString(channel.get_channel_id())
+                    <br/>usable: @channel.get_is_usable()
+                    </li>
+            }
+        </ul>
     }
 
 

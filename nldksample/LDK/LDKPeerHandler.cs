@@ -1,4 +1,5 @@
-﻿using System.Net;
+﻿using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Sockets;
 using NBitcoin;
 using nldksample.LDK;
@@ -17,51 +18,63 @@ public class LDKPeerHandler : IScopedHostedService
         _logger = logger.CreateLogger<LDKPeerHandler>();
     }
 
-    public async Task ConnectAsync(BTCPayServer.Lightning.NodeInfo nodeInfo, CancellationToken cancellationToken)
+    public async Task<Task?> ConnectAsync(BTCPayServer.Lightning.NodeInfo nodeInfo, CancellationToken cancellationToken)
     {
-        await ConnectAsync(nodeInfo.NodeId, IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port),
+        return await ConnectAsync(nodeInfo.NodeId, IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port),
             cancellationToken);
     }
 
-    public async Task ConnectAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken)
+
+
+    public async Task<Task?> ConnectAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken)
     {
-        using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+       var connection = await   ConnectCoreAsync(theirNodeId, remote, cancellationToken);
+       if (connection is null)
+           return null;
+
+       return Task.Run(async () =>
+       {
+           while (connection.Value.Item2.Connected && !cancellationToken.IsCancellationRequested)
+           {
+               await Task.Delay(1000, cancellationToken);
+           }
+
+           connection.Value.Item3.disconnect_socket();
+       });
+
+    }
+    private async Task<(LDKSocketDescriptor, Socket, SocketDescriptor )?> ConnectCoreAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken)
+    {
+        var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
         SocketDescriptor? descriptor = null;
-        try
-        {
-            socket.Blocking = false;
 
             await socket.ConnectAsync(remote, cancellationToken);
             if (!socket.Connected)
             {
-                return;
+              return null;
             }
 
-            var ldkSocket = new LDKSocketDescriptor(socket);
+            var remoteAddress = socket.GetSocketAddress();
+            var ldkSocket = new LDKSocketDescriptor(socket, Guid.NewGuid().ToString());
             descriptor = SocketDescriptor.new_impl(ldkSocket);
             var result =
-                _peerManager.new_outbound_connection(theirNodeId.ToBytes(), descriptor, ldkSocket.RemoteEndPoint());
+                _peerManager.new_outbound_connection(theirNodeId.ToBytes(), descriptor, remoteAddress);
             if (!result.is_ok())
             {
-                return;
+                
+                descriptor?.disconnect_socket();
+                return null;
             }
-
+            _logger.LogInformation($"Connected to {socket.RemoteEndPoint}");
             var initialBytes = ((Result_CVec_u8ZPeerHandleErrorZ.Result_CVec_u8ZPeerHandleErrorZ_OK) result).res;
 
             if (initialBytes.Length != descriptor.send_data(initialBytes, true))
             {
-                return;
+                descriptor?.disconnect_socket();
+                return null;
             }
 
-            while (socket.Connected && !cancellationToken.IsCancellationRequested)
-            {
-                await Task.Delay(1000, cancellationToken);
-            }
-        }
-        finally
-        {
-            descriptor?.disconnect_socket();
-        }
+            return (ldkSocket, socket, descriptor);
     }
 
 
@@ -96,15 +109,18 @@ public class LDKPeerHandler : IScopedHostedService
         while (!cancellationToken.IsCancellationRequested)
         {
             var socket = await listener.AcceptAsync(startCancellationToken);
-            _logger.LogInformation($"Accepted connection from {socket.RemoteEndPoint}");
-            var descriptor = new LDKSocketDescriptor(socket);
+            _logger.LogInformation($"Incoming connection from {socket.RemoteEndPoint}");
+            var remoteAddress = socket.GetSocketAddress();
+            var descriptor = new LDKSocketDescriptor(socket,Guid.NewGuid().ToString());
             var sd = SocketDescriptor.new_impl(descriptor);
-            if (!_peerManager.new_inbound_connection(sd, descriptor.RemoteEndPoint()).is_ok())
+            
+            if (!_peerManager.new_inbound_connection(sd, remoteAddress).is_ok())
             {
                 sd.disconnect_socket();
             }
             else
             {
+                _logger.LogInformation($"Connected to {socket.RemoteEndPoint}");
                 _ = InboundConnectionReader(cancellationToken, socket, sd);
             }
         }

@@ -26,6 +26,7 @@ public class LDKChannelSync : IScopedHostedService
         _explorerClient = explorerClient;
         _watch = watch;
     }
+    
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {

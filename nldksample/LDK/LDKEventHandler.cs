@@ -1,7 +1,9 @@
 ﻿using System.Collections.Concurrent;
 using BTCPayServer.Lightning;
 using NBitcoin;
+using NBXplorer.Models;
 using NLDK;
+using nldksample.LSP.Flow;
 using org.ldk.structs;
 using LightningPayment = NLDK.LightningPayment;
 using Script = NBitcoin.Script;
@@ -11,6 +13,48 @@ using UInt128 = org.ldk.util.UInt128;
 
 namespace nldksample.LDK;
 
+public class LDKFundingGenerationReadyEventHandler: ILDKEventHandler<Event.Event_FundingGenerationReady>
+{
+    private readonly LDKFeeEstimator _feeEstimator;
+    private readonly CurrentWalletService _currentWalletService;
+    private readonly ChannelManager _channelManager;
+    private readonly WalletService _walletService;
+
+    public record FundingTransactionGeneratedEvent(Event.Event_FundingGenerationReady evt, Transaction tx);
+    public event EventHandler<FundingTransactionGeneratedEvent>? FundingTransactionGenerated;
+
+    public LDKFundingGenerationReadyEventHandler(LDKFeeEstimator feeEstimator, CurrentWalletService currentWalletService, ChannelManager channelManager, WalletService walletService)
+    {
+        _feeEstimator = feeEstimator;
+        _currentWalletService = currentWalletService;
+        _channelManager = channelManager;
+        _walletService = walletService;
+    }
+    public async Task Handle(Event.Event_FundingGenerationReady eventFundingGenerationReady)
+    {
+        var feeRate = _feeEstimator.GetFeeRate().GetAwaiter().GetResult();
+        var txOuts = new List<TxOut>()
+        {
+            new(Money.Satoshis(eventFundingGenerationReady.channel_value_satoshis),
+                Script.FromBytesUnsafe(eventFundingGenerationReady.output_script))
+        };
+        var tx = _walletService.CreateTransaction(_currentWalletService.CurrentWallet, txOuts, feeRate).GetAwaiter().GetResult();
+        if (tx is null)
+        {
+            _channelManager.close_channel(eventFundingGenerationReady.temporary_channel_id, eventFundingGenerationReady.counterparty_node_id);
+        }
+        else
+        {
+          var result =   _channelManager.funding_transaction_generated(eventFundingGenerationReady.temporary_channel_id,
+                eventFundingGenerationReady.counterparty_node_id, tx.Value.Tx.ToBytes());
+          if (result.is_ok())
+          {
+              FundingTransactionGenerated?.Invoke(this, new FundingTransactionGeneratedEvent(eventFundingGenerationReady, tx.Value.Tx));
+          }
+        }
+    }
+}
+
 public class LDKEventHandler : EventHandlerInterface
 {
     private readonly string _walletId;
@@ -18,12 +62,12 @@ public class LDKEventHandler : EventHandlerInterface
     private readonly ChannelManager _channelManager;
     private readonly WalletService _walletService;
     private readonly LDKFeeEstimator _feeEstimator;
-    private readonly BumpTransactionEventHandler _bumpTransactionEventHandler;
+    private readonly IEnumerable<ILDKEventHandler> _eventHandlers;
 
     public ConcurrentBag<(DateTimeOffset, Func<Task>)> ScheduledTasks { get; } = new();
 
     public LDKEventHandler(CurrentWalletService currentWalletService, KeysManager keysManager, ChannelManager channelManager,
-        WalletService walletService, LDKFeeEstimator feeEstimator, BumpTransactionEventHandler bumpTransactionEventHandler )
+        WalletService walletService, LDKFeeEstimator feeEstimator,  IEnumerable<ILDKEventHandler> eventHandlers)
     {
         
         _walletId = currentWalletService.CurrentWallet;
@@ -31,18 +75,19 @@ public class LDKEventHandler : EventHandlerInterface
         _channelManager = channelManager;
         _walletService = walletService;
         _feeEstimator = feeEstimator;
-        _bumpTransactionEventHandler = bumpTransactionEventHandler;
+        _eventHandlers = eventHandlers;
     }
 
 
     public void handle_event(Event @event)
     {
+        _eventHandlers.AsParallel().ForAll(handler => handler.Handle(@event).GetAwaiter().GetResult());
+        
         byte[]? preimage;
         switch (@event)
         {
             case Event.Event_BumpTransaction eventBumpTransaction:
                 
-                _bumpTransactionEventHandler.handle_event(eventBumpTransaction.bump_transaction);
 //                 switch (eventBumpTransaction.bump_transaction)
 //                 {
 //                     case BumpTransactionEvent.BumpTransactionEvent_ChannelClose bumpTransactionEventChannelClose:
@@ -76,22 +121,7 @@ public class LDKEventHandler : EventHandlerInterface
             case Event.Event_DiscardFunding eventDiscardFunding:
                 break;
             case Event.Event_FundingGenerationReady eventFundingGenerationReady:
-                var feeRate = _feeEstimator.GetFeeRate().GetAwaiter().GetResult();
-                var txOuts = new List<TxOut>()
-                {
-                    new(Money.Satoshis(eventFundingGenerationReady.channel_value_satoshis),
-                        Script.FromBytesUnsafe(eventFundingGenerationReady.output_script))
-                };
-                var tx = _walletService.CreateTransaction(_walletId, txOuts, feeRate).GetAwaiter().GetResult();
-                if (tx is null)
-                {
-                    _channelManager.close_channel(eventFundingGenerationReady.temporary_channel_id, eventFundingGenerationReady.counterparty_node_id);
-                }
-                else
-                {
-                    _channelManager.funding_transaction_generated(eventFundingGenerationReady.temporary_channel_id,
-                        eventFundingGenerationReady.counterparty_node_id, tx.Value.Tx.ToBytes());
-                }
+                
                 break;
             case Event.Event_HTLCHandlingFailed eventHtlcHandlingFailed:
                 break;
@@ -153,6 +183,7 @@ public class LDKEventHandler : EventHandlerInterface
             case Event.Event_PaymentPathSuccessful eventPaymentPathSuccessful:
                 break;
             case Event.Event_PaymentSent eventPaymentSent:
+                
                 _walletService.PaymentUpdate(_walletId, Convert.ToHexString(eventPaymentSent.payment_hash), false, Convert.ToHexString(
                     ((Option_ThirtyTwoBytesZ.Option_ThirtyTwoBytesZ_Some)eventPaymentSent.payment_id).some),false, Convert.ToHexString(eventPaymentSent.payment_preimage)).GetAwaiter().GetResult();
                 break;

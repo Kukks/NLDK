@@ -1,10 +1,10 @@
 ﻿using System.Net;
-using System.Text;
-using Microsoft.AspNetCore.Connections;
+using System.Net.Sockets;
 using NBitcoin;
 using NBitcoin.RPC;
 using NBXplorer;
 using Newtonsoft.Json;
+using nldksample.LSP.Flow;
 using org.ldk.structs;
 using Network = NBitcoin.Network;
 using Script = NBitcoin.Script;
@@ -15,6 +15,36 @@ namespace nldksample.LDK;
 
 public static class LDKExtensions
 {
+    public static string GetError(this APIError apiError)
+    {
+        return apiError switch
+        {
+            APIError.APIError_APIMisuseError a => a.err,
+            APIError.APIError_FeeRateTooHigh b => $"{b.err} feerate:{b.feerate}",
+            APIError.APIError_InvalidRoute c => c.err,
+            APIError.APIError_ChannelUnavailable d => d.err,
+            APIError.APIError_MonitorUpdateInProgress e => "Monitor update in progress",
+            APIError.APIError_IncompatibleShutdownScript f => "Incompatible shutdown script",
+            _ => throw new ArgumentOutOfRangeException(nameof(apiError))
+        };
+    }
+    public static Option_SocketAddressZ GetSocketAddress(this Socket socket)
+    {
+        if (socket.RemoteEndPoint is null)
+        {
+            return Option_SocketAddressZ.none();
+        }
+        var remote = socket.RemoteEndPoint?.ToString();
+
+        if(remote is null)
+            return Option_SocketAddressZ.none();
+        var ipe = ((IPEndPoint) socket.RemoteEndPoint);
+        
+        return Option_SocketAddressZ.some(SocketAddress.tcp_ip_v4(ipe.Address.GetAddressBytes(), (short) ipe.Port));
+        ;//SocketAddress.from_str(remote);
+       // return !socketAddress.is_ok() ? Option_SocketAddressZ.none() : Option_SocketAddressZ.some(((Result_SocketAddressSocketAddressParseErrorZ.Result_SocketAddressSocketAddressParseErrorZ_OK)socketAddress).res);
+    }
+    
     public static SocketAddress? Endpoint(this EndPoint endPoint)
     {
         return SocketAddress.from_str(endPoint.ToString()) switch
@@ -102,6 +132,10 @@ public static class LDKExtensions
             BumpTransactionEventHandler.of(provider.GetRequiredService<BroadcasterInterface>(),
                 provider.GetRequiredService<CoinSelectionSource>(), provider.GetRequiredService<SignerProvider>(),
                 provider.GetRequiredService<Logger>()));
+        services.AddScoped<LDKBumpTransactionEventHandler>();
+        services.AddScoped<ILDKEventHandler>(provider => provider.GetRequiredService<LDKBumpTransactionEventHandler>());
+        services.AddScoped<LDKFundingGenerationReadyEventHandler>();
+        services.AddScoped<ILDKEventHandler>(provider => provider.GetRequiredService<LDKFundingGenerationReadyEventHandler>());
         services.AddScoped<LDKEventHandler>();
         services.AddScoped<org.ldk.structs.EventHandler>(provider =>
             org.ldk.structs.EventHandler.new_impl(provider.GetRequiredService<LDKEventHandler>()));
@@ -200,6 +234,17 @@ public static class LDKExtensions
             { } cn when cn == ChainName.Mainnet => org.ldk.enums.Network.LDKNetwork_Bitcoin,
             { } cn when cn == ChainName.Testnet => org.ldk.enums.Network.LDKNetwork_Testnet,
             { } cn when cn == ChainName.Regtest => org.ldk.enums.Network.LDKNetwork_Regtest,
+            _ => throw new NotSupportedException()
+        };
+    }
+
+    public static org.ldk.enums.Currency GetLdkCurrency(this Network network)
+    {
+        return network.ChainName switch
+        {
+            { } cn when cn == ChainName.Mainnet => org.ldk.enums.Currency.LDKCurrency_Bitcoin,
+            { } cn when cn == ChainName.Testnet => org.ldk.enums.Currency.LDKCurrency_BitcoinTestnet,
+            { } cn when cn == ChainName.Regtest => org.ldk.enums.Currency.LDKCurrency_Regtest,
             _ => throw new NotSupportedException()
         };
     }
