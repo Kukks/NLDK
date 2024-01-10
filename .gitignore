@@ -7,3 +7,6 @@ riderModule.iml
 nldksample/wallet.db-shm
 nldksample/wallet.db-wal
 nldksample/wallet.db
+*.user
+*.userosscache
+*.userprefs
