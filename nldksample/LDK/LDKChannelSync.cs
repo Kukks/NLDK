@@ -123,10 +123,10 @@ public class LDKChannelSync : IScopedHostedService
             return;
 
         var tx = valueTuple.TransactionInformation.Transaction;
-
+        var txHash = tx.GetHash();
         foreach (var confirm in _confirms)
         {
-            confirm.transaction_unconfirmed(tx.ToBytes());
+            confirm.transaction_unconfirmed(txHash.ToBytes());
         }
     }
 
