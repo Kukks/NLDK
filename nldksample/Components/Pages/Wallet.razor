@@ -19,8 +19,8 @@
 }
 else
 {
-    <button class="btn-primary" @onclick="Derive">Derive</button>
-    <span>total bal: @Balance</span>
+    <h3>Wallet @WalletData.Name</h3>
+    <span>Total balance: @Balance</span>
     <ul>
         @foreach (var s in WalletData.Scripts)
         {
@@ -36,54 +36,74 @@ else
             </li>
         }
     </ul>
+    <button class="btn-primary" @onclick="Derive">Derive new address</button>
 
+    <h4 class="mt-4">Send</h4>
     <input type="number" @bind="SendValue" step="any" min="0.0000001" max="@Balance" placeholder="send amt"/>
     <input type="text" @bind="SendDest"/>
     <button @onclick="Send">Send</button>
 
     @if (_node is not null)
     {
-        var peerManager = _node.ServiceProvider.GetService<PeerManager>();
-        var peers = peerManager.get_peer_node_ids().Select(zz => new PubKey(zz.get_a()) + ":" + (zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x ? x.some.to_str() : ""));
-        <div>Peers: @(string.Join(", ", peers))</div>
+        var peerHandler = _node.ServiceProvider.GetService<LDKPeerHandler>();
+        var peers = peerHandler.GetPeerNodeIds().ToList();
+        var channelManager = _node.ServiceProvider.GetService<ChannelManager>();
+        var channels = channelManager.list_channels();
 
-        <input type="text" @bind="ConnectPeer"/>
-        <button @onclick="ConnectToPeer">Connect to peer</button>
+        <h4 class="mt-4">Node Info</h4>
         if (_node.NodeInfo is not null)
         {
-            <div>Node Info: <input type="text" readonly="readonly" value="@_node.NodeInfo.ToString()"/></div>
+            <div>Node URI: @_node.NodeInfo.ToString()</div>
         }
         else
         {
             <div>Pubkey: @_node.NodeId.ToString()</div>
         }
-        
-        
-        
-        var channelManager = _node.ServiceProvider.GetService<ChannelManager>();
-        <ul>
-            <li>Channels</li>
-            @foreach (var channel in channelManager.list_channels())
-            {
-                <li>@Convert.ToHexString(channel.get_channel_id())
-                    <br/>usable: @channel.get_is_usable()
+
+        <h4 class="mt-4">Peers</h4>
+        @if (peers.Any())
+        {
+            <ul>
+                @foreach (var peer in peers)
+                {
+                    <li>
+                        @peer
                     </li>
-            }
-        </ul>
+                }
+            </ul>
+        }
+        else
+        {
+            <p>No peers yet</p>
+        }
+        <input type="text" @bind="ConnectPeer"/>
+        <button @onclick="ConnectToPeer">Connect to peer</button>
+
+        <h4 class="mt-4">Channels</h4>
+        @if (channels.Any())
+        {
+            <ul>
+                @foreach (var channel in channels)
+                {
+                    <li>
+                        @Convert.ToHexString(channel.get_channel_id())
+                        <br/>
+                        usable: @channel.get_is_usable()
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <p>No channels yet</p>
+        }
     }
 
-
-    <pre>
-    @JsonConvert.SerializeObject(WalletData, Formatting.Indented, new JsonSerializerSettings 
-{ 
-        ReferenceLoopHandling = ReferenceLoopHandling.Ignore
-})
-    
-</pre>
+    <h4 class="mt-4">Raw wallet data</h4>
+    <pre>@JsonConvert.SerializeObject(WalletData, Formatting.Indented, new JsonSerializerSettings { ReferenceLoopHandling = ReferenceLoopHandling.Ignore })</pre>
 }
 
-
-@code{
+@code {
     private LDKNode? _node;
 
     private decimal Balance
@@ -101,7 +121,6 @@ else
         _ = Fetch();
         return base.OnParametersSetAsync();
     }
-
 
     private async Task Fetch()
     {
@@ -143,7 +162,7 @@ else
 
     private async Task ConnectToPeer()
     {
-        if (string.IsNullOrEmpty(ConnectPeer))
+        if (_node == null || string.IsNullOrEmpty(ConnectPeer))
         {
             return;
         }
@@ -154,7 +173,7 @@ else
         }
 
         var peerHandler = _node.ServiceProvider.GetService<LDKPeerHandler>();
-        _ = peerHandler.ConnectAsync(nodeInfo, CancellationToken.None);
+        _ = await peerHandler.ConnectAsync(nodeInfo, CancellationToken.None);
     }
 
 }
