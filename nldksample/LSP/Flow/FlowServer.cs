@@ -268,7 +268,7 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
         if(matchedProposal is not null)
         {
             _logger.LogInformation($"We are FAKING broadcasting for a channel open transaction for {matchedProposal.NodeId}");
-            var txBytes = loadedTx.ToBytes();
+            var txBytes = loadedTx.GetHash().ToBytes();
             foreach (var confirm in _confirms)
             {
                 confirm.transaction_unconfirmed(txBytes);
