@@ -148,6 +148,7 @@ public class LDKPeerHandler : IScopedHostedService
                 break;
             }
 
+            _logger.LogInformation("Read {Read} bytes from {SocketRemoteEndPoint}", read, socket.RemoteEndPoint);
             var data = buffer[..read];
             if (!_peerManager.read_event(sd, data).is_ok())
             {

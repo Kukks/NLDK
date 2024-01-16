@@ -15,8 +15,8 @@
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
-        <PackageReference Include="org.ldk" Version="0.0.118-alpha1" />
         <PackageReference Include="BTCPayServer.Lightning.Common" Version="1.5.1" />
+        <PackageReference Include="org.ldk" Version="0.0.118-28-gd8656f7b" />
         
     </ItemGroup>
 
