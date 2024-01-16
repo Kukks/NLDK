@@ -171,9 +171,11 @@ public static class LDKExtensions
         services.AddScoped<LDKChannelSync>();
         services.AddScoped<LDKPeerHandler>();
         services.AddScoped<LDKBackgroundProcessor>();
+        services.AddScoped<LDKAnnouncementBroadcaster>();
         services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKChannelSync>());
         services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKBackgroundProcessor>());
         services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKPeerHandler>());
+        services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKAnnouncementBroadcaster>());
 
         services.AddSingleton<LDKLogger>();
         services.AddSingleton<ChainParameters>(provider =>
