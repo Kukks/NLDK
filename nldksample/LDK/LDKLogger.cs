@@ -3,8 +3,7 @@ using org.ldk.structs;
 
 namespace nldksample.LDK;
 
-
-public class LDKWalletLoggerFactory: ILoggerFactory
+public class LDKWalletLoggerFactory : ILoggerFactory
 {
     private readonly CurrentWalletService _currentWalletService;
     private readonly ILoggerFactory _inner;
@@ -14,6 +13,7 @@ public class LDKWalletLoggerFactory: ILoggerFactory
         _currentWalletService = currentWalletService;
         _inner = loggerFactory;
     }
+
     public void Dispose()
     {
         //ignore as this is scoped
@@ -26,28 +26,27 @@ public class LDKWalletLoggerFactory: ILoggerFactory
 
     public ILogger CreateLogger(string categoryName)
     {
-        return _inner.CreateLogger($"LDK[{_currentWalletService.CurrentWallet}]{categoryName}");
+        categoryName = string.IsNullOrWhiteSpace(categoryName) ? $"LDK[{_currentWalletService.CurrentWallet}]" :  categoryName + "." + _currentWalletService.CurrentWallet;
+        return _inner.CreateLogger(categoryName);
     }
 }
 
-public class LDKWalletLogger: LDKLogger
+public class LDKWalletLogger : LDKLogger
 {
-    public LDKWalletLogger(LDKWalletLoggerFactory ldkWalletLoggerFactory):base(ldkWalletLoggerFactory.CreateLogger(""))
+    public LDKWalletLogger(LDKWalletLoggerFactory ldkWalletLoggerFactory) : base(ldkWalletLoggerFactory)
     {
     }
 }
 
 public class LDKLogger : LoggerInterface, ILogger
 {
-    private readonly ILogger _logger;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger _baseLogger;
 
-    public LDKLogger(ILogger logger)
+    public LDKLogger(ILoggerFactory loggerFactory)
     {
-        _logger = logger;
-    }
-    public LDKLogger(ILoggerFactory loggerFactory):this(loggerFactory.CreateLogger("LDK"))
-    {
-        
+        _loggerFactory = loggerFactory;
+        _baseLogger = loggerFactory.CreateLogger("LDK");
     }
 
     public void log(Record record)
@@ -61,22 +60,22 @@ public class LDKLogger : LoggerInterface, ILogger
             Level.LDKLevel_Error => LogLevel.Error,
             Level.LDKLevel_Gossip => LogLevel.Trace,
         };
-        _logger.Log(level, $"[{record.get_module_path()}] {record.get_args()}");
+        _loggerFactory.CreateLogger("LDK." + record.get_module_path()).Log(level, $"{record.get_args()}");
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
     {
-        return _logger.BeginScope(state);
+        return _baseLogger.BeginScope(state);
     }
 
     public bool IsEnabled(LogLevel logLevel)
-    
     {
-        return _logger.IsEnabled(logLevel);
+        return _baseLogger.IsEnabled(logLevel);
     }
 
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter)
     {
-        _logger.Log(logLevel, eventId, state, exception, formatter);
+        _baseLogger.Log(logLevel, eventId, state, exception, formatter);
     }
 }
