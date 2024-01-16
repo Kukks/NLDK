@@ -5,6 +5,7 @@ using NBXplorer;
 using NLDK;
 using nldksample.Components;
 using nldksample.LDK;
+using nldksample.LSP.Flow;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,6 +14,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
+
 
 builder.Services
     .AddHostedService<MigratonHostedService>()
@@ -26,7 +28,8 @@ builder.Services
         new ExplorerClient(nbxNetworkProvider.GetFromCryptoCode("BTC"), new Uri("http://localhost:24446")))
     .AddDbContextFactory<WalletContext>(optionsBuilder => optionsBuilder.UseSqlite("wallet.db"));
 
-var app = builder.Build();
+var app = builder.Build().AddFlowServer();
+
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

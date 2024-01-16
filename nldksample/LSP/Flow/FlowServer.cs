@@ -1,6 +1,5 @@
 ﻿using System.Collections.Concurrent;
 using System.ComponentModel;
-using System.Net;
 using BTCPayServer.Lightning;
 using NBitcoin;
 using NLDK;
@@ -12,54 +11,6 @@ using Transaction = NBitcoin.Transaction;
 using UInt128 = org.ldk.util.UInt128;
 
 namespace nldksample.LSP.Flow;
-
-public interface ILDKEventHandler<in TEvent>: ILDKEventHandler where TEvent : Event
-{
-    Task Handle(TEvent @event);
-}
-
-public interface ILDKEventHandler
-{
-    Task Handle(Event @event)
-    {
-        var eventType = @event.GetType();
-        
-        var result = this.GetType().GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ILDKEventHandler<>) && i.GetGenericArguments()[0] == eventType)
-            ?.GetMethod(nameof(ILDKEventHandler<Event>.Handle))
-            ?.MakeGenericMethod(eventType)
-            ?.Invoke(this, new object[] {@event});
-
-        if (result is Task task)
-            return task;
-        return Task.CompletedTask;
-    }
-}
-
-public class FlowServerProposalContext
-{
-    public BOLT11PaymentRequest OriginalBolt11 { get; set; }
-    public BOLT11PaymentRequest ProvidedBolt11 { get; set; }
-    public LightMoney FeeCharged { get; set; }
-    public string? FeeId { get; set; }
-    public DateTimeOffset Expiry { get; set; }
-    public PubKey NodeId { get; set; }
-    public EndPoint? NodeEndpoint { get; set; }
-    public LightMoney ChannelSizeToOpen { get; set; }
-    public LightMoney ChannelOutbound { get; set; }
-    public string? UserChannelId { get; set; }
-    
-
-    public Transaction? ChannelOpenTx { get; set; }
-    public string? PaymentPreimage { get; set; }
-    public string? TempChannelId { get; set; }
-}
-
-
-public interface IBroadcastGateKeeper
-{
-    bool DontBroadcast(Transaction loadedTx);
-}
-
 
 public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>, 
     IScopedHostedService, 
@@ -82,8 +33,10 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
     private readonly IEnumerable<Confirm> _confirms;
     private readonly WalletService _walletService;
     private readonly NodeSigner _nodeSigner;
+    private readonly CurrentWalletService _currentWalletService;
+
     private readonly Logger _ldkLogger;
-    public FlowServerSettings Settings { get; set; }
+    // public FlowServerSettings Settings { get; set; }
 
     public class FlowServerSettings
     {
@@ -117,7 +70,6 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
         LDKPeerHandler peerHandler,
         ChannelManager channelManager,
         LDKWalletLogger logger,
-        FlowServerSettings settings,
         LDKNode node,
         Network network, 
         UserConfig userConfig, 
@@ -126,6 +78,7 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
         IEnumerable<Confirm> confirms, 
         WalletService walletService,
         NodeSigner nodeSigner,
+        CurrentWalletService currentWalletService,
         Logger ldkLogger)
     {
         _feeEstimator = feeEstimator;
@@ -141,15 +94,21 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
         _confirms = confirms;
         _walletService = walletService;
         _nodeSigner = nodeSigner;
+        _currentWalletService = currentWalletService;
         _ldkLogger = ldkLogger;
-        Settings = settings;
     }
 
-
+    public async Task<FlowServerSettings> GetSettings()
+    {
+       
+        return (await _walletService.GetArbitraryData<FlowServerSettings>(nameof(FlowServerSettings), _currentWalletService.CurrentWallet)) ?? new FlowServerSettings();
+    }
 
     public async Task<FlowFeeResponse> RequestFee(FlowFeeRequest request)
     {
-        if (!Settings.Enabled)
+        
+        var settings = await GetSettings();
+        if (!settings.Enabled)
         {
             throw new InvalidOperationException("Flow server is disabled");
         }
@@ -157,9 +116,9 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
         {
             Id = Guid.NewGuid().ToString()
         };
-        var feeRate = await _feeEstimator.GetFeeRate(Settings.FeeTarget);
+        var feeRate = await _feeEstimator.GetFeeRate(settings.FeeTarget);
         
-        response.Amount = Settings.GetFee(request.Amount, feeRate, out var computedChannelSize);
+        response.Amount = settings.GetFee(request.Amount, feeRate, out var computedChannelSize);
         
         Fees.TryAdd(response.Id, (request, response, DateTimeOffset.UtcNow.AddMinutes(10)));
         return response;
@@ -167,7 +126,8 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
     
     public async Task<FlowInfoResponse> GetInfo()
     {
-        if (!Settings.Enabled)
+        var settings = await GetSettings();
+        if (!settings.Enabled)
         {
             throw new InvalidOperationException("Flow server is disabled");
         }
@@ -190,7 +150,8 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
 
     public async Task<FlowProposalResponse> GetProposal(FlowProposalRequest request)
     {
-        if (!Settings.Enabled)
+        var settings = await GetSettings();
+        if (!settings.Enabled)
         {
             throw new InvalidOperationException("Flow server is disabled");
         }
@@ -209,12 +170,12 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
                 throw new InvalidOperationException("Fee expired");
             feeAmt = savedFee.Response.Amount;
             amt = savedFee.Request.Amount;
-            Settings.GetFee(savedFee.Request.Amount, await _feeEstimator.GetFeeRate(Settings.FeeTarget), out computedChannelSize);
+            settings.GetFee(savedFee.Request.Amount, await _feeEstimator.GetFeeRate(settings.FeeTarget), out computedChannelSize);
         }
        else
        {
            amt = bolt11.MinimumAmount;
-           feeAmt = Settings.GetFee(bolt11.MinimumAmount, await _feeEstimator.GetFeeRate(Settings.FeeTarget), out computedChannelSize);
+           feeAmt = settings.GetFee(bolt11.MinimumAmount, await _feeEstimator.GetFeeRate(settings.FeeTarget), out computedChannelSize);
        }
         // UtilMethods.create_invoice_from_channelmanager_and_duration_since_epoch_with_payment_hash(_channelManager, _nodeSigner, _ldkLogger, _network.GetLdkCurrency(),
         //     feeAmt + amt, bolt11.ShortDescription, bolt11.ExpiryDate.ToUnixTimeSeconds(),,bolt11.MinFinalCLTVExpiry)
@@ -329,7 +290,8 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
 
     public async Task Handle(Event.Event_HTLCIntercepted @event)
     {
-        if (!Settings.Enabled)
+        var settings = await GetSettings();
+        if (!settings.Enabled)
         {
             _logger.LogInformation("We intercepted an htlc but Flow server is disabled");
             var result = _channelManager.fail_intercepted_htlc(@event.intercept_id);

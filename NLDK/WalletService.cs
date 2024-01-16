@@ -3,6 +3,7 @@ using BTCPayServer.Lightning;
 using Microsoft.EntityFrameworkCore;
 using NBitcoin;
 using NBXplorer.Models;
+using Newtonsoft.Json;
 
 namespace NLDK;
 
@@ -458,7 +459,24 @@ public class WalletService
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        return await context.ArbitraryData.Where(data => data.WalletId == walletId)
+        var dict =  await context.ArbitraryData.Where(data => data.WalletId == walletId)
             .ToDictionaryAsync(data => data.Key, data => data.Value, cancellationToken);
+        if(walletId is null)
+            return dict;
+        return dict.ToDictionary(kv => kv.Key.Replace(walletId, ""), kv => kv.Value);
     }
+    public async Task<T?> GetArbitraryData<T>(string key, string? walletId,
+        CancellationToken cancellationToken = default)
+    {
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        var result =   await context.ArbitraryData.FirstOrDefaultAsync(data => data.WalletId == walletId && data.Key == key, cancellationToken: cancellationToken);
+        if (result is null)
+            return default;
+        if(typeof(T) ==  typeof(byte[]))
+            return (T)(object)result.Value;
+        
+        return JsonConvert.DeserializeObject<T>(Convert.ToString(result.Value)!);
+    }
+    
+    
 }

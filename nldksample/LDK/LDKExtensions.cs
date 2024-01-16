@@ -4,6 +4,7 @@ using NBitcoin;
 using NBitcoin.RPC;
 using NBXplorer;
 using Newtonsoft.Json;
+using NLDK;
 using nldksample.LSP.Flow;
 using org.ldk.structs;
 using Network = NBitcoin.Network;
@@ -70,6 +71,7 @@ public static class LDKExtensions
         services.AddScoped(provider =>
         {
             var feeEstimator = provider.GetRequiredService<FeeEstimator>();
+            var walletService = provider.GetRequiredService<WalletService>();
             var watch = provider.GetRequiredService<Watch>();
             var broadcasterInterface = provider.GetRequiredService<BroadcasterInterface>();
             var router = provider.GetRequiredService<Router>();
@@ -81,7 +83,8 @@ public static class LDKExtensions
             var chainParameters = provider.GetRequiredService<ChainParameters>();
             var currentWalletService = provider.GetRequiredService<CurrentWalletService>();
             var filter = provider.GetRequiredService<Filter>();
-            if (currentWalletService.GetRequired().TryGetValue("ChannelManager", out var channelManagerSerialized))
+            var channelManagerSerialized = walletService.GetArbitraryData<byte[]>("ChannelManager", currentWalletService.CurrentWallet).GetAwaiter().GetResult();
+            if (channelManagerSerialized is not null)
             {
                 var channelMonitors = currentWalletService.GetInitialChannelMonitors(entropySource, signerProvider);
                 
@@ -132,10 +135,13 @@ public static class LDKExtensions
             BumpTransactionEventHandler.of(provider.GetRequiredService<BroadcasterInterface>(),
                 provider.GetRequiredService<CoinSelectionSource>(), provider.GetRequiredService<SignerProvider>(),
                 provider.GetRequiredService<Logger>()));
-        services.AddScoped<LDKBumpTransactionEventHandler>();
-        services.AddScoped<ILDKEventHandler>(provider => provider.GetRequiredService<LDKBumpTransactionEventHandler>());
-        services.AddScoped<LDKFundingGenerationReadyEventHandler>();
-        services.AddScoped<ILDKEventHandler>(provider => provider.GetRequiredService<LDKFundingGenerationReadyEventHandler>());
+        
+        services.AddLDKEventHandler<LDKBumpTransactionEventHandler>();
+        services.AddLDKEventHandler<LDKFundingGenerationReadyEventHandler>();
+        services.AddLDKEventHandler<LDKOpenChannelRequestEventHandler>();
+        services.AddLDKEventHandler<LDKPaymentEventsHandler>();
+        services.AddLDKEventHandler<LDKPendingHTLCsForwardableEventHandler>();
+        
         services.AddScoped<LDKEventHandler>();
         services.AddScoped<org.ldk.structs.EventHandler>(provider =>
             org.ldk.structs.EventHandler.new_impl(provider.GetRequiredService<LDKEventHandler>()));
@@ -201,6 +207,7 @@ public static class LDKExtensions
                 provider.GetGlobalLDKLogger());
         });
         
+        
         services.AddSingleton<ProbabilisticScoringDecayParameters>(provider => ProbabilisticScoringDecayParameters.with_default());
         services.AddSingleton<ProbabilisticScorer>(provider =>
         {
@@ -227,6 +234,13 @@ public static class LDKExtensions
         return services;
     }
 
+    public static IServiceCollection AddLDKEventHandler<T>(this IServiceCollection services) where T : class, ILDKEventHandler
+    {
+        services.AddScoped<T>();
+        services.AddScoped<ILDKEventHandler>(provider => provider.GetRequiredService<T>());
+        return services;
+    }
+    
     public static org.ldk.enums.Network GetLdkNetwork(this Network network)
     {
         return network.ChainName switch

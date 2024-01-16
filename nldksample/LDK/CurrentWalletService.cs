@@ -10,7 +10,7 @@ public class CurrentWalletService
 {
     private readonly WalletService _walletService;
     private Wallet? _wallet;
-    private Dictionary<string, byte[]> _data;
+    // private Dictionary<string, byte[]> _data;
     public CurrentWalletService(WalletService walletService)
     {
         _walletService = walletService;
@@ -24,13 +24,13 @@ public class CurrentWalletService
         }
         _wallet = wallet;
         Seed = new Mnemonic(_wallet.Mnemonic).DeriveExtKey().Derive(new KeyPath(_wallet.DerivationPath.Replace("/*", ""))).PrivateKey.ToBytes();
-        _walletService.GetArbitraryData(_wallet.Id).ContinueWith(task => 
-        {
-            _data = task.Result.ToDictionary(kv => kv.Key.Replace(_wallet.Id, ""), kv => kv.Value);
-            
-            WalletSelected.SetResult();
-            
-        });
+        // _walletService.GetArbitraryData(_wallet.Id).ContinueWith(task => 
+        // {
+        //     _data = task.Result.ToDictionary(kv => kv.Key.Replace(_wallet.Id, ""), kv => kv.Value);
+        //     
+        //     
+        // });
+        WalletSelected.SetResult();
         
     }
 
@@ -69,10 +69,4 @@ public class CurrentWalletService
         _ss.Release();
         return _channels;
     }
-
-    public Dictionary<string, byte[]> GetRequired()
-    {
-        return _data;
-    }
-    
 }
