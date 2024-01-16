@@ -24,10 +24,10 @@ public class LDKWalletLoggerFactory : ILoggerFactory
         _inner.AddProvider(provider);
     }
 
-    public ILogger CreateLogger(string categoryName)
+    public ILogger CreateLogger(string category)
     {
-        categoryName = string.IsNullOrWhiteSpace(categoryName) ? $"LDK[{_currentWalletService.CurrentWallet}]" :  categoryName + "." + _currentWalletService.CurrentWallet;
-        return _inner.CreateLogger(categoryName);
+        return _inner.CreateLogger((string.IsNullOrWhiteSpace(category) ? "LDK": $"LDK.{category}") +
+                                   $"[{_currentWalletService.CurrentWallet}]");
     }
 }
 
@@ -46,7 +46,7 @@ public class LDKLogger : LoggerInterface, ILogger
     public LDKLogger(ILoggerFactory loggerFactory)
     {
         _loggerFactory = loggerFactory;
-        _baseLogger = loggerFactory.CreateLogger("LDK");
+        _baseLogger = loggerFactory.CreateLogger("");
     }
 
     public void log(Record record)
@@ -60,7 +60,7 @@ public class LDKLogger : LoggerInterface, ILogger
             Level.LDKLevel_Error => LogLevel.Error,
             Level.LDKLevel_Gossip => LogLevel.Trace,
         };
-        _loggerFactory.CreateLogger("LDK." + record.get_module_path()).Log(level, $"{record.get_args()}");
+        _loggerFactory.CreateLogger(record.get_module_path()).Log(level, "{Args}", record.get_args());
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
