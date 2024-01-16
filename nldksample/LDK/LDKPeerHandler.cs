@@ -37,6 +37,7 @@ public class LDKPeerHandler : IScopedHostedService
            }
 
            connection.Value.Item3.disconnect_socket();
+           _logger.LogInformation("Disconnected from {SocketRemoteEndPoint}", connection.Value.Item2.RemoteEndPoint);
        }, cancellationToken);
 
     }
@@ -53,9 +54,11 @@ public class LDKPeerHandler : IScopedHostedService
         }
 
         _logger.LogInformation("Establishing connection to {SocketRemoteEndPoint}", socket.RemoteEndPoint);
+        
         var remoteAddress = socket.GetSocketAddress();
-        var ldkSocket = new LDKSocketDescriptor(socket, Guid.NewGuid().ToString());
+        var ldkSocket = new LDKSocketDescriptor(socket, Guid.NewGuid().ToString(), _logger);
         descriptor = SocketDescriptor.new_impl(ldkSocket);
+        _ = InboundConnectionReader(cancellationToken, socket, descriptor);
         var result = _peerManager.new_outbound_connection(theirNodeId.ToBytes(), descriptor, remoteAddress);
         if (!result.is_ok())
         {
@@ -118,7 +121,7 @@ public class LDKPeerHandler : IScopedHostedService
             var socket = await listener.AcceptAsync(startCancellationToken);
             _logger.LogInformation("Incoming connection from {SocketRemoteEndPoint}", socket.RemoteEndPoint);
             var remoteAddress = socket.GetSocketAddress();
-            var descriptor = new LDKSocketDescriptor(socket,Guid.NewGuid().ToString());
+            var descriptor = new LDKSocketDescriptor(socket,Guid.NewGuid().ToString(), _logger);
             var sd = SocketDescriptor.new_impl(descriptor);
 
             if (!_peerManager.new_inbound_connection(sd, remoteAddress).is_ok())

@@ -33,7 +33,8 @@ public class WalletService
             .Include(wallet => wallet.Scripts)
             .ThenInclude<Wallet, WalletScript, Script>(script => script.Script)
             .ThenInclude(script => script.Transactions)
-            .Include(wallet => wallet.Channels);
+            .Include(wallet => wallet.Channels)
+            .Include(wallet => wallet.LightningPayments);
     }
 
     public async Task<Wallet?> Get(string walletId, CancellationToken cancellationToken = default)
