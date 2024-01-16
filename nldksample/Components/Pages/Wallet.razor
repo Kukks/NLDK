@@ -85,10 +85,13 @@ else
             <ul>
                 @foreach (var channel in channels)
                 {
+                    var id = channel.get_channel_id();
                     <li>
-                        @Convert.ToHexString(channel.get_channel_id())
+                        @Convert.ToHexString(id)
                         <br/>
                         usable: @channel.get_is_usable()
+                        <button @onclick="() => CloseChannel(channel, false)">Close </button>
+                        <button @onclick="() => CloseChannel(channel, true)">Force Close </button>
                     </li>
                 }
             </ul>
@@ -174,6 +177,19 @@ else
 
         var peerHandler = _node.ServiceProvider.GetService<LDKPeerHandler>();
         _ = await peerHandler.ConnectAsync(nodeInfo, CancellationToken.None);
+    }
+
+    private Task CloseChannel(ChannelDetails channel, bool force)
+    {
+        var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+        var result = force ? channelManager.force_close_broadcasting_latest_txn(channel.get_channel_id(), channel.get_counterparty().get_node_id()) : channelManager.close_channel(channel.get_channel_id(), channel.get_counterparty().get_node_id();
+
+        if (result is Result_NoneAPIErrorZ.Result_NoneAPIErrorZ_Err error)
+        {
+            _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().Log(LogLevel.Error, $"Error{(force? " force": "")} closing channel: {error.err.GetError()} ");
+        }
+        return Task.CompletedTask;
+        
     }
 
 }
