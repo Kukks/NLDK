@@ -11,7 +11,7 @@ public class LDKSocketDescriptor : SocketDescriptorInterface
         _socket = socket;
         _id = id;
     }
-    public long send_data(byte[] data, bool resume_read)
+    public long send_data(byte[] data, bool resumeRead)
     {
         return _socket.Send(data);
     }
@@ -21,9 +21,9 @@ public class LDKSocketDescriptor : SocketDescriptorInterface
         _socket.Disconnect(true);
     }
 
-    public bool eq(SocketDescriptor other_arg)
+    public bool eq(SocketDescriptor otherArg)
     {
-        return hash() == other_arg.hash();
+        return hash() == otherArg.hash();
     }
 
     public long hash()
