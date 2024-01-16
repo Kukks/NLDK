@@ -12,7 +12,6 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);
 var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
 
 builder.Services
@@ -23,11 +22,9 @@ builder.Services
     .AddLDK()
     .AddSingleton<NBXListener>()
     .AddSingleton<Network>(provider => provider.GetRequiredService<ExplorerClient>().Network.NBitcoinNetwork)
-    .AddSingleton<ExplorerClient>(provider =>
+    .AddSingleton<ExplorerClient>(_ =>
         new ExplorerClient(nbxNetworkProvider.GetFromCryptoCode("BTC"), new Uri("http://localhost:24446")))
-    .AddDbContextFactory<WalletContext>(optionsBuilder => optionsBuilder
-        .UseSqlite("wallet.db")
-        .EnableSensitiveDataLogging());
+    .AddDbContextFactory<WalletContext>(optionsBuilder => optionsBuilder.UseSqlite("wallet.db"));
 
 var app = builder.Build();
 
