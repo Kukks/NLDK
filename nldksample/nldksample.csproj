@@ -16,6 +16,7 @@
 
     <ItemGroup>
         <InternalsVisibleTo Include="NLDK.Tests" />
+        <InternalsVisibleTo Include="CrashRepro" />
       <ProjectReference Include="..\NLDK\NLDK.csproj" />
     </ItemGroup>
 

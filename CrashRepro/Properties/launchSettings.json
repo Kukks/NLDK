@@ -1,0 +1,27 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+    "profiles": {
+      "http": {
+        "commandName": "Project",
+        "dotnetRunMessages": true,
+        "launchBrowser": true,
+        "applicationUrl": "http://localhost:5034",
+        "environmentVariables": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "NLDK_CONNECTIONSTRING": "Data Source=wallet.db",
+          "NLDK_NBXplorerConnection":"http://localhost:24446"
+        }
+      },
+      "https": {
+        "commandName": "Project",
+        "dotnetRunMessages": true,
+        "launchBrowser": true,
+        "applicationUrl": "https://localhost:7285;http://localhost:5034",
+        "environmentVariables": {
+          "ASPNETCORE_ENVIRONMENT": "Development",
+          "NLDK_CONNECTIONSTRING": "Data Source=wallet.db",
+          "NLDK_NBXplorerConnection":"http://localhost:24446"
+        }
+      }
+    }
+  }
