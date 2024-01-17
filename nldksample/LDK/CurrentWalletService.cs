@@ -48,12 +48,12 @@ public class CurrentWalletService
     
     public TaskCompletionSource WalletSelected { get; } = new();
 
-    public bool IsThisWallet(TrackedSource trackedSource)
-    {
-        if(trackedSource is WalletTrackedSource wts)
-            return wts.WalletId == CurrentWallet;
-        return _wallet.AliasWalletName.Contains(trackedSource.ToString());
-    }
+    // public bool IsThisWallet(TrackedSource trackedSource)
+    // {
+    //     if(trackedSource is WalletTrackedSource wts)
+    //         return wts.WalletId == CurrentWallet;
+    //     return _wallet.AliasWalletName.Contains(trackedSource.ToString());
+    // }
 
     private ChannelMonitor[]? _channels = null;
     private readonly SemaphoreSlim _ss = new(1,1);

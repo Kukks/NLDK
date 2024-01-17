@@ -21,9 +21,16 @@
         var hash = await ExplorerClient.RPCClient.GetBestBlockHashAsync();
         var ts = new DerivationSchemeTrackedSource(genWallet.DerivationScheme);
         var idx = genWallet.GetMnemonic().DeriveExtKey().GetPublicKey().GetHDFingerPrint().ToString();
-        var wts = new WalletTrackedSource(idx);
+        var wts = new GroupTrackedSource(idx);
         await ExplorerClient.TrackAsync(wts);
-        await ExplorerClient.AddParentWallet(ts, wts);
+        await ExplorerClient.AddGroupChildrenAsync(idx, new GroupChild[]
+        {
+            new GroupChild()
+            {
+                TrackedSource = ts.ToString(),
+                CryptoCode = "BTC"
+            }
+        });
         var id = await WalletService.Create(genWallet.GetMnemonic(), null, genWallet.AccountKeyPath.KeyPath + "/*", hash.ToString(), new[] {ts.ToString(), wts.ToString()});
       
         NavigationManager.NavigateTo($"/wallets/{id}");
