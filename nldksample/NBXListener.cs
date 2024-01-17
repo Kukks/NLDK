@@ -10,7 +10,7 @@ public class NBXListener : IHostedService
     private readonly WalletService _walletService;
     private readonly ILogger<NBXListener> _logger;
     private readonly Network _network;
-    private WebsocketNotificationSession _session;
+    private WebsocketNotificationSession? _session;
 
     public NBXListener(ExplorerClient explorerClient, WalletService walletService, ILogger<NBXListener> logger, Network network)
     {
@@ -28,7 +28,7 @@ public class NBXListener : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -56,6 +56,7 @@ public class NBXListener : IHostedService
                             }
                             catch (Exception e)
                             {
+                                // ignored
                             }
                         }
                     }
@@ -121,6 +122,6 @@ public class NBXListener : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _session.DisposeAsync(cancellationToken);
+        await (_session?.DisposeAsync(cancellationToken)?? Task.CompletedTask);
     }
 }

@@ -25,7 +25,7 @@ public class LDKNode : IAsyncDisposable, IHostedService
 
     public PubKey NodeId => new(_channelManager.get_our_node_id());
     
-    public BTCPayServer.Lightning.NodeInfo? NodeInfo => _peerHandler.Endpoint is null ? null :  NodeInfo.Parse($"{NodeId}@{_peerHandler.Endpoint}");
+    public NodeInfo? NodeInfo => _peerHandler.Endpoint is null ? null :  NodeInfo.Parse($"{NodeId}@{_peerHandler.Endpoint}");
     
 
     public event EventHandler OnDisposing;

@@ -17,13 +17,13 @@ public class LDKPeerHandler : IScopedHostedService
         _logger = logger.CreateLogger<LDKPeerHandler>();
     }
 
-    public async Task<Task?> ConnectAsync(BTCPayServer.Lightning.NodeInfo nodeInfo, CancellationToken cancellationToken)
+    public async Task<Task?> ConnectAsync(BTCPayServer.Lightning.NodeInfo nodeInfo, CancellationToken cancellationToken = default)
     {
         var remote = IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port);
         return await ConnectAsync(nodeInfo.NodeId, remote, cancellationToken);
     }
 
-    public async Task<Task?> ConnectAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken)
+    public async Task<Task?> ConnectAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken = default)
     {
        var connection = await ConnectCoreAsync(theirNodeId, remote, cancellationToken);
        if (connection is null)

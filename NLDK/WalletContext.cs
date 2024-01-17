@@ -23,7 +23,8 @@ public class WalletContext : DbContext
     
     override protected void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
-        optionsBuilder.UseSqlite("Data Source=wallet.db");
+        if(!optionsBuilder.IsConfigured)
+            optionsBuilder.UseSqlite("Data Source=wallet.db");
     }
     public WalletContext(DbContextOptions options) : base(options)
     {
