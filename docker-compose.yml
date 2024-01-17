@@ -47,12 +47,12 @@ services:
     environment:
       NBXPLORER_BTCRPCURL: http://bitcoind:43782/
       ASPNETCORE_ENVIRONMENT: Development
-      NBXPLORER_NOAUTH: true
+      NBXPLORER_NOAUTH: 1
       NBXPLORER_BTCRPCUSER: ceiwHEbqWI83
       NBXPLORER_BTCRPCPASSWORD: DwubwWsoo3
       NBXPLORER_POSTGRES: User ID=postgres;Application Name=test;Include Error Detail=true;Host=postgres;Port=5432
       NBXPLORER_BTCNODEENDPOINT: bitcoind:39388
-      NBXPLORER_EXPOSERPC: true
+      NBXPLORER_EXPOSERPC: 1
       NBXPLORER_CHAINS: btc
       NBXPLORER_NETWORK: regtest
       ASPNETCORE_HTTP_PORTS: 24445
