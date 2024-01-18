@@ -6,8 +6,10 @@
 @using NBXplorer
 @using nldksample.LDK
 @using org.ldk.structs
+@using org.ldk.util
 @using Coin = NLDK.Coin
 @using TxOut = NBitcoin.TxOut
+@using UInt128 = org.ldk.util.UInt128
 @inject WalletService WalletService
 @inject Network Network
 @inject ExplorerClient ExplorerClient
@@ -67,7 +69,28 @@ else
                 @foreach (var peer in peers)
                 {
                     <li>
-                        @peer
+                        @peer 
+                        <ul>
+                            <li>peer channels</li>
+                            @foreach (var channel in channels.Where(details => new PubKey(details.get_counterparty().get_node_id()) == peer.NodeId ))
+                            {
+                                var id = channel.get_channel_id();
+                                <li>
+                                    @Convert.ToHexString(id)
+                                    <br/>
+                                    usable: @channel.get_is_usable()
+                                    <button @onclick="() => CloseChannel(channel, false)">Close </button>
+                                    <button @onclick="() => CloseChannel(channel, true)">Force Close </button>
+                                </li>
+                           
+                            }
+                            <li>Open channel 
+                                <input type="number" @bind="OpenChannelAmt" max="@Balance"/> 
+                                <button @onclick="() => OpenChannel(peer.NodeId, OpenChannelAmt)">
+                                    Open channel
+                                </button> 
+                            </li>
+                        </ul>
                     </li>
                 }
             </ul>
@@ -90,8 +113,8 @@ else
                         @Convert.ToHexString(id)
                         <br/>
                         usable: @channel.get_is_usable()
-                        @* <button @onclick="() => CloseChannel(channel, false)">Close </button> *@
-                        @* <button @onclick="() => CloseChannel(channel, true)">Force Close </button> *@
+                        <button @onclick="() => CloseChannel(channel, false)">Close </button>
+                        <button @onclick="() => CloseChannel(channel, true)">Force Close </button>
                     </li>
                 }
             </ul>
@@ -113,6 +136,22 @@ else
     {
         get { return UnspentCoins?.Sum(coin => coin.Value) ?? 0; }
     }
+
+    public async Task OpenChannel(PubKey nodeId, decimal amt)
+    {
+
+
+        var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+        var userConfig = _node.ServiceProvider.GetRequiredService<UserConfig>();
+        _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogInformation($"Attempt to open channel of {amt} to {nodeId}");
+
+        var result = channelManager.create_channel(nodeId.ToBytes(), Money.Coins(amt).Satoshi, 0, new UInt128(RandomUtils.GetBytes(16)), userConfig);
+        if (result is Result_ThirtyTwoBytesAPIErrorZ.Result_ThirtyTwoBytesAPIErrorZ_Err err)
+        {
+            _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogError($"Could not create channel because: { err.err.GetError()}");
+        }
+    }
+
 
     private IEnumerable<Coin>? UnspentCoins => WalletData?.Scripts.Where(walletScript => walletScript.DerivationPath is not null).SelectMany(script => script.Script.Coins).Where(coin => coin.SpendingTransactionHash is null);
 
@@ -144,6 +183,7 @@ else
     private decimal SendValue { get; set; }
     private string? SendDest { get; set; }
     private string? ConnectPeer { get; set; }
+    private decimal OpenChannelAmt { get; set; }
 
     private async Task Send()
     {
@@ -185,17 +225,21 @@ else
     //     // channelManager.create_channel()
     // }
     //
-    // private Task CloseChannel(ChannelDetails channel, bool force)
-    // {
-    //     var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
-    //     var result = force ? channelManager.force_close_broadcasting_latest_txn(channel.get_channel_id(), channel.get_counterparty().get_node_id()) : channelManager.close_channel(channel.get_channel_id(), channel.get_counterparty().get_node_id();
-    //
-    //     if (result is Result_NoneAPIErrorZ.Result_NoneAPIErrorZ_Err error)
-    //     {
-    //         _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().Log(LogLevel.Error, $"Error{(force? " force": "")} closing channel: {error.err.GetError()} ");
-    //     }
-    //     return Task.CompletedTask;
-    //     
-    // }
+    private Task CloseChannel(ChannelDetails channel, bool force)
+     {
+         var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+        var nodeId = channel.get_counterparty().get_node_id();
+        var channelId = channel.get_channel_id();
+         var result = force ? 
+           channelManager.force_close_broadcasting_latest_txn(channelId, nodeId) :
+           channelManager.close_channel(channelId, nodeId);
+    
+         if (result is Result_NoneAPIErrorZ.Result_NoneAPIErrorZ_Err error)
+         {
+             _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().Log(LogLevel.Error, $"Error{(force? " force": "")} closing channel: {error.err.GetError()} ");
+         }
+         return Task.CompletedTask;
+         
+    }
 
 }

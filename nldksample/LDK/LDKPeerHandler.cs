@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using NBitcoin;
 using nldksample.LDK;
 using org.ldk.structs;
+using WalletWasabi.Userfacing;
+using NodeInfo = BTCPayServer.Lightning.NodeInfo;
 
 public class LDKPeerHandler : IScopedHostedService
 {
@@ -148,31 +150,27 @@ public class LDKPeerHandler : IScopedHostedService
             var read = await networkStream.ReadAsync(buffer, cancellationToken);
             if (read == 0)
             {
+_logger.LogWarning("Disconnecting from {SocketRemoteEndPoint}, because read returned 0", socket.RemoteEndPoint);
                 break;
             }
 
             _logger.LogInformation("Read {Read} bytes from {SocketRemoteEndPoint}", read, socket.RemoteEndPoint);
             var data = buffer[..read];
-            if (!_peerManager.read_event(sd, data).is_ok())
-            {
-                _logger.LogWarning("Disconnecting from {SocketRemoteEndPoint}, because read_event failed", socket.RemoteEndPoint);
-                sd.disconnect_socket();
-            }
-            else
-            {
-                _logger.LogInformation("Read message from from {SocketRemoteEndPoint}", socket.RemoteEndPoint);
-            }
+            if (_peerManager.read_event(sd, data).is_ok()) continue;
+            _logger.LogWarning("Disconnecting from {SocketRemoteEndPoint}, because read_event failed", socket.RemoteEndPoint);
+            sd.disconnect_socket();
         }
-        _logger.LogInformation("Disconnecting from {SocketRemoteEndPoint}", socket.RemoteEndPoint);
     }
 
-    public IEnumerable<string> GetPeerNodeIds()
+    public IEnumerable<NodeInfo> GetPeerNodeIds()
     {
         return _peerManager.get_peer_node_ids().Select(zz =>
         {
             var pubKey = new PubKey(zz.get_a());
             var addr = zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x ? x.some.to_str() : null;
-            return string.IsNullOrEmpty(addr) ? pubKey.ToString() : $"{pubKey}@{addr}";
+            EndPointParser.TryParse(addr, 9735, out var endpoint);
+            return new NodeInfo(pubKey, endpoint.Host(), endpoint.Port().Value);
+
         });
     }
 

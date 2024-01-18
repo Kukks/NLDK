@@ -1,0 +1,28 @@
+﻿@page "/wallets/{walletId}/logs"
+@using nldksample.LDK
+@using NBitcoin.Logging
+<h3>WalletLogs</h3>
+
+@if (_logs is not null)
+{
+    foreach (var log in _logs)
+    {
+        <p>@log</p>
+    }
+}
+
+@inject LDKNodeManager NodeManager
+@code {
+    private List<string> _logs;
+
+
+    [Parameter] public string WalletId { get; set; }
+    protected override async Task OnParametersSetAsync()
+    {
+       
+        var node = await NodeManager.GetLDKNodeForWallet(WalletId);
+        _logs = node.ServiceProvider.GetRequiredService<LDKWalletLoggerFactory>().Logs;
+        await base.OnParametersSetAsync();
+    }
+
+}

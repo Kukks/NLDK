@@ -15,14 +15,23 @@ public class LDKSocketDescriptor : SocketDescriptorInterface
     }
     public long send_data(byte[] data, bool resumeRead)
     {
-        _logger.LogDebug($"Sending {data.Length} bytes data to {_socket.RemoteEndPoint}");
-        var result =  _socket.Send(data);
-        _logger.LogDebug($"Sent {result} bytes data to {_socket.RemoteEndPoint}");
-        return result;
+        try
+        {
+
+            var result = _socket.Send(data);
+            return result;
+        }
+        catch (Exception e)
+        {
+            disconnect_socket();
+            return 0;
+        }
     }
 
     public void disconnect_socket()
     {
+        if(!_socket.Connected)
+            return;
         _logger.LogDebug($"Disconnecting with {_socket.RemoteEndPoint}");
         _socket.Disconnect(true);
     }

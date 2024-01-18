@@ -23,12 +23,47 @@ public class LDKWalletLoggerFactory : ILoggerFactory
     {
         _inner.AddProvider(provider);
     }
+    
+    public List<string> Logs { get; } = new List<string>();
 
     public ILogger CreateLogger(string category)
     {
-        return _inner.CreateLogger((string.IsNullOrWhiteSpace(category) ? "LDK": $"LDK.{category}") +
-                                   $"[{_currentWalletService.CurrentWallet}]");
+        var categoryName = (string.IsNullOrWhiteSpace(category) ? "LDK": $"LDK.{category}") +
+                           $"[{_currentWalletService.CurrentWallet}]" ;
+        LoggerWrapper logger = new LoggerWrapper(_inner.CreateLogger(categoryName));
+
+        logger.LogEvent += (sender, message) => Logs.Add(DateTime.Now.ToShortTimeString() +" "+categoryName +message);
+        
+        return logger;
     }
+}
+
+public class LoggerWrapper:ILogger
+{
+    private readonly ILogger _inner;
+
+    public LoggerWrapper(ILogger inner)
+    {
+        _inner = inner;
+    }
+    
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return _inner.BeginScope(state);
+    }
+
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return _inner.IsEnabled(logLevel);
+    }
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        _inner.Log(logLevel, eventId, state, exception, formatter);
+        LogEvent?.Invoke(this, formatter(state, exception));
+    }
+    
+    public event EventHandler<string>? LogEvent;
 }
 
 public class LDKWalletLogger : LDKLogger
@@ -49,7 +84,7 @@ public class LDKLogger : LoggerInterface, ILogger
         _baseLogger = loggerFactory.CreateLogger("");
     }
 
-    public void log(Record record)
+    public virtual void log(Record record)
     {
         var level = record.get_level() switch
         {
@@ -73,7 +108,7 @@ public class LDKLogger : LoggerInterface, ILogger
         return _baseLogger.IsEnabled(logLevel);
     }
 
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+    public virtual void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
         Func<TState, Exception?, string> formatter)
     {
         _baseLogger.Log(logLevel, eventId, state, exception, formatter);
