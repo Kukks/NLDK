@@ -10,3 +10,4 @@ nldksample/wallet.db
 *.user
 *.userosscache
 *.userprefs
+*.db*

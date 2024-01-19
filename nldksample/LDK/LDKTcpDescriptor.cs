@@ -13,7 +13,6 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
     private readonly Action<string> _onDisconnect;
     private readonly NetworkStream _stream;
     private readonly CancellationTokenSource _cts;
-    private bool _pausedWrite;
 
     public SocketDescriptor SocketDescriptor { get; set; }
 
@@ -25,7 +24,11 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         var descriptor = new LDKTcpDescriptor(peerManager, tcpClient, logger,s => descriptors.TryRemove(s, out _));
         var result = peerManager.new_inbound_connection(SocketDescriptor.new_impl(descriptor),
             tcpClient.Client.GetSocketAddress());
-        if (result.is_ok()) return descriptor;
+        if (result.is_ok())
+        {
+            logger.LogInformation("New inbound connection accepted");
+            return descriptor;
+        }
 
         descriptor.disconnect_socket();
         return null;
@@ -42,7 +45,11 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             descriptor.send_data(ok.res, false);
         }
 
-        if (result.is_ok()) return descriptor;
+        if (result.is_ok())
+        {
+            logger.LogInformation("New outbounf connection accepted");
+            return descriptor;
+        }
         descriptor.disconnect_socket();
         return null;
     }
@@ -58,7 +65,25 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         SocketDescriptor = SocketDescriptor.new_impl(this);
 
         _cts = new CancellationTokenSource();
+        _ = CheckConnection(_cts.Token);
         _ = ReadEvents(_cts.Token);
+        
+    }
+
+    private async Task CheckConnection(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested && _tcpClient.Connected)
+        {
+            try
+            {
+                await Task.Delay(1000, cancellationToken);
+            }
+
+            catch(OperationCanceledException)
+            {
+            }
+        }
+        disconnect_socket();
     }
     private async Task ReadEvents(CancellationToken cancellationToken)
     {
@@ -145,6 +170,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             return;
         }
 
+        _logger.LogInformation("Disconnecting socket");
         _cts.Cancel();
         _stream.Dispose();
         _tcpClient.Dispose();

@@ -3,6 +3,7 @@ using AsyncKeyedLock;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Configuration.Memory;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -11,6 +12,8 @@ using NBXplorer;
 using NBXplorer.Models;
 using NLDK;
 using nldksample.LDK;
+using org.ldk.structs;
+using UInt128 = org.ldk.util.UInt128;
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,12 +21,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
 
+builder.Configuration.AddEnvironmentVariables("NLDK_");
 builder.Services
-    .Configure<NLDKOptions>(options =>
-    {
-        options.ConnectionString = $"Data Source={Guid.NewGuid()}.db";
-        options.NBXplorerConnection = "http://localhost:24446";
-    })
+    .Configure<NLDKOptions>(builder.Configuration)
     .AddHostedService<MigratonHostedService>()
     .AddHostedService<NBXListener>(provider => provider.GetRequiredService<NBXListener>())
     .AddSingleton<AsyncKeyedLocker<string>>()
@@ -62,10 +62,6 @@ async Task<string> CreateWallet(IServiceProvider serviceProvider)
     return await walletService.Create(genWallet.GetMnemonic(), null, genWallet.AccountKeyPath.KeyPath + "/*",
         hash.ToString(), new[] {ts.ToString(), wts.ToString()});
 }
-
-
-
-
 var explorerClient = app.Services.GetRequiredService<ExplorerClient>();
 var walletService = app.Services.GetRequiredService<WalletService>();
 var nodeManager = app.Services.GetRequiredService<LDKNodeManager>();
@@ -83,7 +79,6 @@ await explorerClient.RPCClient.SendToAddressAsync(wallet1Script.ToScript(), Mone
 await explorerClient.RPCClient.SendToAddressAsync(wallet2Script.ToScript(), Money.Coins(2));
 await explorerClient.RPCClient.GenerateAsync(1);
 
-
 while (wallet1Node.NodeInfo is null || wallet2Node.NodeInfo is null)
 {
     await Task.Delay(100);
@@ -91,9 +86,30 @@ while (wallet1Node.NodeInfo is null || wallet2Node.NodeInfo is null)
 
 var wallet1PeerHandler = wallet1Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
 var wallet2PeerHandler = wallet2Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
-LDKSTcpDescriptor? wallet1Peer = null;
+LDKTcpDescriptor? wallet1Peer = null;
 
 while (wallet1Peer is null)
 {
     wallet1Peer = await wallet1PeerHandler.ConnectAsync(wallet2Node.NodeInfo);
 }
+var wallet1ChannelManager= wallet1Node.ServiceProvider.GetRequiredService<ChannelManager>();
+var wallet1UserConfig= wallet1Node.ServiceProvider.GetRequiredService<UserConfig>();
+var userChannelId = new UInt128(RandomUtils.GetBytes(16));
+var channelResult = wallet1ChannelManager.create_channel(
+    wallet2Node.NodeId.ToBytes(), 
+    Money.Coins(0.5m).Satoshi, 
+    0,
+    userChannelId, 
+    wallet1UserConfig);
+
+while(wallet1ChannelManager.list_channels().Length == 0)
+{
+    await Task.Delay(100);
+}
+
+var channels = wallet1ChannelManager.list_channels();
+
+var channel = channels[0];
+
+
+

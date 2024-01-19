@@ -12,7 +12,6 @@ WORKDIR /src
 COPY ["NuGet.Config", "."]
 COPY ["nldksample/nldksample.csproj", "nldksample/"]
 COPY ["NLDK/NLDK.csproj", "NLDK/"]
-COPY ["NBXplorer/NBXplorer.Client/NBXplorer.Client.csproj", "NBXplorer/NBXplorer.Client/"]
 RUN dotnet restore "./nldksample/./nldksample.csproj"
 COPY . .
 WORKDIR "/src/nldksample"

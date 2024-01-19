@@ -12,14 +12,16 @@ public class LDKPeerHandler : IScopedHostedService
 {
     private readonly ILogger<LDKPeerHandler> _logger;
     private readonly PeerManager _peerManager;
+    private readonly ChannelManager _channelManager;
     private CancellationTokenSource? _cts;
 
     readonly ConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
 
 
-    public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger)
+    public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger, ChannelManager channelManager)
     {
         _peerManager = peerManager;
+        _channelManager = channelManager;
         _logger = logger.CreateLogger<LDKPeerHandler>();
     }
 
@@ -68,7 +70,7 @@ public class LDKPeerHandler : IScopedHostedService
 
     public EndPoint Endpoint { get; set; }
 
-    public async Task<LDKTcpDescriptor?> ConnectAsync(BTCPayServer.Lightning.NodeInfo nodeInfo,
+    public async Task<LDKTcpDescriptor?> ConnectAsync(NodeInfo nodeInfo,
         CancellationToken cancellationToken = default)
     {
         var remote = IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port);
@@ -78,6 +80,9 @@ public class LDKPeerHandler : IScopedHostedService
     public async Task<LDKTcpDescriptor?> ConnectAsync(PubKey theirNodeId, EndPoint remote,
         CancellationToken cancellationToken = default)
     {
+        if (_channelManager.get_our_node_id() == theirNodeId.ToBytes())
+            return null;
+        
         var client = new TcpClient();
         await client.ConnectAsync(remote.IPEndPoint(), cancellationToken);
         var result = LDKTcpDescriptor.Outbound(_peerManager, client, _logger, theirNodeId, _descriptors);
