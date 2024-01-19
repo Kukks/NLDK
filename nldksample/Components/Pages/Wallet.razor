@@ -8,6 +8,7 @@
 @using org.ldk.structs
 @using org.ldk.util
 @using Coin = NLDK.Coin
+@using NodeInfo = BTCPayServer.Lightning.NodeInfo
 @using TxOut = NBitcoin.TxOut
 @using UInt128 = org.ldk.util.UInt128
 @inject WalletService WalletService
@@ -21,7 +22,8 @@
 }
 else
 {
-    <h3>Wallet @WalletData.Name</h3>
+    <div class="d-flex"> <h3>Wallet @WalletData.Name</h3> <a href="/wallets/@WalletId/logs">Logs</a></div>
+   
     <span>Total balance: @Balance</span>
     <ul>
         @foreach (var s in WalletData.Scripts)
@@ -47,10 +49,7 @@ else
 
     @if (_node is not null)
     {
-        var peerHandler = _node.ServiceProvider.GetService<LDKPeerHandler>();
-        var peers = peerHandler.GetPeerNodeIds().ToList();
-        var channelManager = _node.ServiceProvider.GetService<ChannelManager>();
-        var channels = channelManager.list_channels();
+
 
         <h4 class="mt-4">Node Info</h4>
         if (_node.NodeInfo is not null)
@@ -63,16 +62,16 @@ else
         }
 
         <h4 class="mt-4">Peers</h4>
-        @if (peers.Any())
+        @if (_peers?.Any() is true)
         {
             <ul>
-                @foreach (var peer in peers)
+                @foreach (var peer in _peers)
                 {
                     <li>
                         @peer 
                         <ul>
                             <li>peer channels</li>
-                            @foreach (var channel in channels.Where(details => new PubKey(details.get_counterparty().get_node_id()) == peer.NodeId ))
+                            @foreach (var channel in _channels?.Where(details => new PubKey(details.get_counterparty().get_node_id()) == peer.NodeId ))
                             {
                                 var id = channel.get_channel_id();
                                 <li>
@@ -103,10 +102,10 @@ else
         <button @onclick="ConnectToPeer">Connect to peer</button>
 
         <h4 class="mt-4">Channels</h4>
-        @if (channels.Any())
+        @if (_channels?.Any() is true)
         {
             <ul>
-                @foreach (var channel in channels)
+                @foreach (var channel in _channels)
                 {
                     var id = channel.get_channel_id();
                     <li>
@@ -131,6 +130,10 @@ else
 
 @code {
     private LDKNode? _node;
+    private LDKPeerHandler _peerManager;
+    private ChannelManager _channelManager;
+    private List<NodeInfo> _peers;
+    private List<ChannelDetails> _channels;
 
     private decimal Balance
     {
@@ -139,16 +142,18 @@ else
 
     public async Task OpenChannel(PubKey nodeId, decimal amt)
     {
-
-
-        var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+        
         var userConfig = _node.ServiceProvider.GetRequiredService<UserConfig>();
         _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogInformation($"Attempt to open channel of {amt} to {nodeId}");
 
-        var result = channelManager.create_channel(nodeId.ToBytes(), Money.Coins(amt).Satoshi, 0, new UInt128(RandomUtils.GetBytes(16)), userConfig);
+        var result = _channelManager.create_channel(nodeId.ToBytes(), Money.Coins(amt).Satoshi, 0, new UInt128(RandomUtils.GetBytes(16)), userConfig);
         if (result is Result_ThirtyTwoBytesAPIErrorZ.Result_ThirtyTwoBytesAPIErrorZ_Err err)
         {
             _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogError($"Could not create channel because: { err.err.GetError()}");
+        }
+        else if (result is Result_ThirtyTwoBytesAPIErrorZ.Result_ThirtyTwoBytesAPIErrorZ_OK ok)
+        {
+            _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogInformation($"Channel created with id {Convert.ToHexString(ok.res)}");
         }
     }
 
@@ -170,6 +175,14 @@ else
         {
             WalletData = task.Result;
             _node = await NodeManager.GetLDKNodeForWallet(WalletData);
+            
+            if (_node is not null)
+            {
+                _peerManager = _node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
+                _peers = _peerManager.GetPeerNodeIds();
+                    _channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+                _channels = _channelManager.list_channels().ToList();
+            }
             await InvokeAsync(StateHasChanged);
         });
     }

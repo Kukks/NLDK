@@ -91,7 +91,7 @@ while (wallet1Node.NodeInfo is null || wallet2Node.NodeInfo is null)
 
 var wallet1PeerHandler = wallet1Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
 var wallet2PeerHandler = wallet2Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
-Task? wallet1Peer = null;
+LDKSTcpDescriptor? wallet1Peer = null;
 
 while (wallet1Peer is null)
 {

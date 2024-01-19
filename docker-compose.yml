@@ -39,11 +39,10 @@ services:
       - "39383:5432"
     expose:
       - "5432"
-  nbxplorer:    
+  nbxplorer:
+    restart: unless-stopped
     container_name: nldk_nbxplorer
-    build:
-      context: ./NBXplorer
-      dockerfile: Dockerfile
+    image: nicolasdorier/nbxplorer:2.5.0
     environment:
       NBXPLORER_BTCRPCURL: http://bitcoind:43782/
       ASPNETCORE_ENVIRONMENT: Development

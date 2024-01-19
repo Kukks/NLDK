@@ -41,9 +41,9 @@ public static class LDKExtensions
             return Option_SocketAddressZ.none();
         var ipe = ((IPEndPoint) socket.RemoteEndPoint);
         
-        return Option_SocketAddressZ.some(SocketAddress.tcp_ip_v4(ipe.Address.GetAddressBytes(), (short) ipe.Port));
-        ;//SocketAddress.from_str(remote);
-       // return !socketAddress.is_ok() ? Option_SocketAddressZ.none() : Option_SocketAddressZ.some(((Result_SocketAddressSocketAddressParseErrorZ.Result_SocketAddressSocketAddressParseErrorZ_OK)socketAddress).res);
+        // return Option_SocketAddressZ.some(SocketAddress.tcp_ip_v4(ipe.Address.GetAddressBytes(), (short) ipe.Port));
+        var socketAddress =SocketAddress.from_str(remote);
+       return !socketAddress.is_ok() ? Option_SocketAddressZ.none() : Option_SocketAddressZ.some(((Result_SocketAddressSocketAddressParseErrorZ.Result_SocketAddressSocketAddressParseErrorZ_OK)socketAddress).res);
     }
     
     public static SocketAddress? Endpoint(this EndPoint endPoint)

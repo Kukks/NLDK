@@ -5,6 +5,27 @@ namespace WalletWasabi.Userfacing;
 //from wasabi 
 public static class EndPointParser
 {
+	
+	public static IPEndPoint IPEndPoint(this EndPoint endPoint)
+	{
+		
+		if(endPoint is IPEndPoint ipEndPoint)
+			return ipEndPoint;
+		if(endPoint is not DnsEndPoint dnsEndPoint)
+			throw new FormatException($"Invalid endpoint: {endPoint}");
+		
+		
+		var addresses = System.Net.Dns.GetHostAddresses(dnsEndPoint.Host);
+		if (addresses.Length == 0)
+		{
+			throw new ArgumentException(
+				"Unable to retrieve address from specified host name.", 
+				"hostName"
+			);
+		}
+		return new IPEndPoint(addresses[0], dnsEndPoint.Port); // Port gets validated here.
+	}
+	
 	public static string Host(this EndPoint me)
 	{
 		if (me is DnsEndPoint dnsEndPoint)
@@ -55,6 +76,17 @@ public static class EndPointParser
 	/// <param name="defaultPort">If invalid and it's needed to use, then this function returns false.</param>
 	public static bool TryParse(string? endPointString, int defaultPort, [NotNullWhen(true)] out EndPoint? endPoint)
 	{
+		
+		if(System.Net.IPEndPoint.TryParse(endPointString, out var ipEndPoint))
+		{
+			if (ipEndPoint.Port == 0)
+			{
+				ipEndPoint.Port = defaultPort;
+			}
+			endPoint = ipEndPoint;
+			return true;
+		}
+		
 		endPoint = null;
 
 		try
@@ -112,14 +144,7 @@ public static class EndPointParser
 				host = IPAddress.Loopback.ToString();
 			}
 
-			if (IPAddress.TryParse(host, out IPAddress? addr))
-			{
-				endPoint = new IPEndPoint(addr, port);
-			}
-			else
-			{
-				endPoint = new DnsEndPoint(host, port);
-			}
+			endPoint = new DnsEndPoint(host, port);
 
 			return true;
 		}
