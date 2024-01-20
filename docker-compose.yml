@@ -21,8 +21,8 @@ services:
         deprecatedrpc=signrawtransaction
         fallbackfee=0.0002
     ports:
-      - "43782:43782"
-      - "39388:39388"
+      - "43882:43782"
+      - "43883:39388"
     expose:
       - "43782" # RPC
       - "39388" # P2P
@@ -39,20 +39,26 @@ services:
       - "39383:5432"
     expose:
       - "5432"
-  pgadmin:
-    image: dpage/pgadmin4:6
+  nbxplorer:
+    restart: unless-stopped
+    container_name: nldk_nbxplorer
+    image: nicolasdorier/nbxplorer:2.5.0
     environment:
-      PGADMIN_DEFAULT_EMAIL: "test@test.com"
-      PGADMIN_DEFAULT_PASSWORD: "a"
+      NBXPLORER_BTCRPCURL: http://bitcoind:43782/
+      ASPNETCORE_ENVIRONMENT: Development
+      NBXPLORER_NOAUTH: 1
+      NBXPLORER_BTCRPCUSER: ceiwHEbqWI83
+      NBXPLORER_BTCRPCPASSWORD: DwubwWsoo3
+      NBXPLORER_POSTGRES: User ID=postgres;Application Name=test;Include Error Detail=true;Host=postgres;Port=5432
+      NBXPLORER_BTCNODEENDPOINT: bitcoind:39388
+      NBXPLORER_EXPOSERPC: 1
+      NBXPLORER_CHAINS: btc
+      NBXPLORER_NETWORK: regtest
+      ASPNETCORE_HTTP_PORTS: 24445
+      ASPNETCORE_HTTPS_PORTS: 24446
+      ASPNETCORE_URLS: http://+:24446
     ports:
-      - "8484:80"
-    expose:
-      - "5432"
-    depends_on:
-      - postgres
-    volumes:
-      - ./Docker/servers.json:/pgadmin4/servers.json
-
+        - "24446:24446"
 
 volumes:
   bitcoin_datadir:

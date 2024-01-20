@@ -1,9 +1,7 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
-using NBitcoin;
 using NBXplorer;
 using NLDK;
-using org.ldk.structs;
 using Wallet = NLDK.Wallet;
 
 namespace nldksample.LDK;
@@ -26,8 +24,16 @@ public class LDKNodeManager : IHostedService, IDisposable
 
     private ConcurrentDictionary<string, LDKNode> Nodes { get; } = new();
 
-    
-    
+
+    public async Task<LDKNode?> GetLDKNodeForWallet(string walletId, CancellationToken cancellationToken = default)
+    {
+        if(Nodes.TryGetValue(walletId, out var node))
+            return node;
+        var wallet = await _walletService.Get(walletId, cancellationToken);
+        if (wallet is null)
+            return null;
+        return await GetLDKNodeForWallet(wallet, cancellationToken);
+    }
     
     public async Task<LDKNode> GetLDKNodeForWallet(Wallet wallet, CancellationToken cancellationToken = default)
     {

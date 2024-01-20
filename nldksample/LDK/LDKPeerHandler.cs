@@ -1,190 +1,107 @@
-﻿using System.Net;
+﻿using System.Collections.Concurrent;
+using System.Net;
 using System.Net.Sockets;
 using NBitcoin;
 using org.ldk.structs;
+using WalletWasabi.Userfacing;
 using NodeInfo = BTCPayServer.Lightning.NodeInfo;
 
 namespace nldksample.LDK;
 
 public class LDKPeerHandler : IScopedHostedService
 {
+    private readonly ILogger<LDKPeerHandler> _logger;
     private readonly PeerManager _peerManager;
-    private readonly ILogger _logger;
+    private readonly ChannelManager _channelManager;
     private CancellationTokenSource? _cts;
 
-    public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger)
+    readonly ConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
+
+
+    public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger, ChannelManager channelManager)
     {
         _peerManager = peerManager;
+        _channelManager = channelManager;
         _logger = logger.CreateLogger<LDKPeerHandler>();
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        _ = Listen();
+        _ = ListenForInboundConnections(_cts.Token);
+        _ = PeriodicTicker(_cts.Token, 10000, () => _peerManager.timer_tick_occurred());
+        _ = PeriodicTicker(_cts.Token, 1000, () => _peerManager.process_events());
     }
 
-
-    public async Task ConnectAsync(NodeInfo nodeInfo, CancellationToken cancellationToken)
+    private async Task PeriodicTicker(CancellationToken cancellationToken, int ms, Action action)
     {
-       await ConnectAsync(nodeInfo.NodeId, IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port),
-           cancellationToken);
-    }
-    public async Task ConnectAsync(PubKey theirNodeId, EndPoint remote, CancellationToken cancellationToken)
-    {
-        using Socket socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-        SocketDescriptor? descriptor = null;
-        try
+        while (!cancellationToken.IsCancellationRequested)
         {
-            socket.Blocking = false;
-
-            await socket.ConnectAsync(remote, cancellationToken);
-            if (!socket.Connected)
-            {
-                throw new IOException("Failed to connect");
-            }
-
-            descriptor = SocketDescriptor.new_impl(new LDKSocketDescriptor(socket));
-            var result = _peerManager.new_outbound_connection(theirNodeId.ToBytes(), descriptor,
-                Option_SocketAddressZ.some(remote.Endpoint()));
-            if (!result.is_ok())
-            {
-                return;
-            }
-
-            var initialBytes = ((Result_CVec_u8ZPeerHandleErrorZ.Result_CVec_u8ZPeerHandleErrorZ_OK) result).res;
-            
-            if (initialBytes.Length != descriptor.send_data(initialBytes, true))
-            {
-                return;
-            }
-            while (socket.Connected)
-            {
-                _peerManager.process_events();
-            }
-        }
-        finally
-        {
-            descriptor?.disconnect_socket();
+            await Task.Delay(ms, cancellationToken);
+            action.Invoke();
         }
     }
-
-
-    private async Task Listen()
-    {
-        try
-        {
-            _logger.LogInformation("Starting LDKPeerHandler");
-            var ip = new IPEndPoint(IPAddress.Any, 0);
-            using var listener = new Socket(ip.AddressFamily, SocketType.Stream, ProtocolType.Tcp);
-
-            listener.Bind(ip);
-            listener.Listen(100);
-            Endpoint =   listener.RemoteEndPoint?? new IPEndPoint(IPAddress.Loopback, ip.Port);
-            _logger.LogInformation("LDKPeerHandler started");
-
-            while (!_cts.IsCancellationRequested)
-            {
-                try
-                {
-                    var client = await listener.AcceptAsync().ConfigureAwait(false);
-                    // Handle the client connection in a separate task to allow the listener to continue accepting new connections
-                    _ = Task.Run(() => HandleClientAsync(client, _cts.Token));
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error accepting client connection.");
-                    if (_cts.IsCancellationRequested)
-                    {
-                        break;
-                    }
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            Endpoint = null;
-            _logger.LogError(e, "Error starting LDKPeerHandler");
-        }
-    }
-
-    public EndPoint? Endpoint { get; private set; }
-
-    private async Task HandleClientAsync(Socket client, CancellationToken cancellationToken)
-    {
-        SocketDescriptor descriptor = null;
-        try
-        {
-            descriptor = SocketDescriptor.new_impl(new LDKSocketDescriptor(client));
-            var remoteSocketAddress = client.RemoteEndPoint?.Endpoint();
-            var result = _peerManager.new_inbound_connection(descriptor,
-                remoteSocketAddress is null
-                    ? Option_SocketAddressZ.none()
-                    : Option_SocketAddressZ.some(remoteSocketAddress));
-            if (result is Result_NonePeerHandleErrorZ.Result_NonePeerHandleErrorZ_Err)
-            {
-                return;
-            }
-
-            await using NetworkStream networkStream = new NetworkStream(client, true);
-
-            int bufSz = 1024 * 16;
-            byte[] buffer = new byte[bufSz];
-            // Assuming PeerManager has methods for handling incoming data and possibly sending responses
-            while (!cancellationToken.IsCancellationRequested)
-            {
-                Array.Clear(buffer, 0, buffer.Length);
-
-                if (_peerManager.write_buffer_space_avail(descriptor) is Result_NonePeerHandleErrorZ
-                        .Result_NonePeerHandleErrorZ_Err)
-                {
-                    return;
-                }
-
-                int bytesRead = await networkStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)
-                    .ConfigureAwait(false);
-
-
-                if (bytesRead <= 0)
-                {
-                    // The client closed the connection
-                    break;
-                }
-
-                var read_result_pointer = _peerManager.read_event(descriptor, buffer.AsSpan(0, bytesRead).ToArray());
-                if (!read_result_pointer.is_ok())
-                {
-                    break;
-                }
-
-                _peerManager.process_events();
-            }
-        }
-        catch (IOException ex) when (ex.InnerException is SocketException)
-        {
-            // Handle specific socket exceptions if needed
-            _logger.LogError(ex, "Socket exception occurred.");
-        }
-        catch (OperationCanceledException)
-        {
-            // Handle cancellation
-            _logger.LogInformation("Operation canceled while handling client connection.");
-        }
-        catch (Exception ex)
-        {
-            // Handle other exceptions
-            _logger.LogError(ex, "Error occurred while handling client connection.");
-        }
-        finally
-        {
-            descriptor?.disconnect_socket();
-        }
-    }
-
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         if (_cts is not null)
             await _cts.CancelAsync();
+
+        _logger.LogInformation("Stopping, disconnecting all peers");
+        _peerManager.disconnect_all_peers();
+    }
+
+    private async Task ListenForInboundConnections(CancellationToken cancellationToken = default)
+    {
+        using var listener = new TcpListener(new IPEndPoint(IPAddress.Any, 0));
+        listener.Start();
+        var ip = listener.LocalEndpoint;
+        Endpoint = new IPEndPoint(IPAddress.Loopback, (int) ip.Port());
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            var result = LDKTcpDescriptor.Inbound(_peerManager, await listener.AcceptTcpClientAsync(cancellationToken),
+                _logger, _descriptors);
+            if (result is not null)
+            {
+                _descriptors.TryAdd(result.Id, result);
+            }
+        }
+    }
+
+    public EndPoint Endpoint { get; set; }
+
+    public async Task<LDKTcpDescriptor?> ConnectAsync(NodeInfo nodeInfo,
+        CancellationToken cancellationToken = default)
+    {
+        var remote = IPEndPoint.Parse(nodeInfo.Host + ":" + nodeInfo.Port);
+        return await ConnectAsync(nodeInfo.NodeId, remote, cancellationToken);
+    }
+
+    public async Task<LDKTcpDescriptor?> ConnectAsync(PubKey theirNodeId, EndPoint remote,
+        CancellationToken cancellationToken = default)
+    {
+        if (_channelManager.get_our_node_id() == theirNodeId.ToBytes())
+            return null;
+        
+        var client = new TcpClient();
+        await client.ConnectAsync(remote.IPEndPoint(), cancellationToken);
+        var result = LDKTcpDescriptor.Outbound(_peerManager, client, _logger, theirNodeId, _descriptors);
+        if (result is not null)
+        {
+            _descriptors.TryAdd(result.Id, result);
+        }
+
+        return result;
+    }
+
+    public List<NodeInfo> GetPeerNodeIds()
+    {
+        return _peerManager.get_peer_node_ids().Select(zz =>
+        {
+            var pubKey = new PubKey(zz.get_a());
+            var addr = zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x ? x.some.to_str() : null;
+            EndPointParser.TryParse(addr, 9735, out var endpoint);
+            return new NodeInfo(pubKey, endpoint.Host(), endpoint.Port().Value);
+        }).ToList();
     }
 }

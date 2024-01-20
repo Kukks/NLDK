@@ -26,6 +26,7 @@ public class LDKChannelSync : IScopedHostedService
         _explorerClient = explorerClient;
         _watch = watch;
     }
+    
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
@@ -99,9 +100,10 @@ public class LDKChannelSync : IScopedHostedService
             latestheader = await _explorerClient.RPCClient.GetBlockHeaderAsync(latest.BestBlockHash, cancellationToken);
         }
 
+        var headerBytes = latestheader.ToBytes();
         foreach (var confirm in _confirms)
         {
-            confirm.best_block_updated(latestheader.ToBytes(), latest.Blocks);
+            confirm.best_block_updated(headerBytes, latest.Blocks);
         }
 
         var monitors = _currentWalletService.GetInitialChannelMonitors(null, null);
@@ -121,10 +123,10 @@ public class LDKChannelSync : IScopedHostedService
             return;
 
         var tx = valueTuple.TransactionInformation.Transaction;
-
+        var txHash = tx.GetHash();
         foreach (var confirm in _confirms)
         {
-            confirm.transaction_unconfirmed(tx.ToBytes());
+            confirm.transaction_unconfirmed(txHash.ToBytes());
         }
     }
 

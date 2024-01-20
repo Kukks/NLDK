@@ -3,8 +3,7 @@ using org.ldk.structs;
 
 namespace nldksample.LDK;
 
-
-public class LDKWalletLoggerFactory: ILoggerFactory
+public class LDKWalletLoggerFactory : ILoggerFactory
 {
     private readonly CurrentWalletService _currentWalletService;
     private readonly ILoggerFactory _inner;
@@ -14,6 +13,7 @@ public class LDKWalletLoggerFactory: ILoggerFactory
         _currentWalletService = currentWalletService;
         _inner = loggerFactory;
     }
+
     public void Dispose()
     {
         //ignore as this is scoped
@@ -23,34 +23,68 @@ public class LDKWalletLoggerFactory: ILoggerFactory
     {
         _inner.AddProvider(provider);
     }
+    
+    public List<string> Logs { get; } = new List<string>();
 
-    public ILogger CreateLogger(string categoryName)
+    public ILogger CreateLogger(string category)
     {
-        return _inner.CreateLogger($"LDK[{_currentWalletService.CurrentWallet}]{categoryName}");
+        var categoryName = (string.IsNullOrWhiteSpace(category) ? "LDK": $"LDK.{category}") +
+                           $"[{_currentWalletService.CurrentWallet}]" ;
+        LoggerWrapper logger = new LoggerWrapper(_inner.CreateLogger(categoryName));
+
+        logger.LogEvent += (sender, message) => Logs.Add(DateTime.Now.ToShortTimeString() +" "+categoryName +message);
+        
+        return logger;
     }
 }
 
-public class LDKWalletLogger: LDKLogger
+public class LoggerWrapper:ILogger
 {
-    public LDKWalletLogger(LDKWalletLoggerFactory ldkWalletLoggerFactory):base(ldkWalletLoggerFactory.CreateLogger(""))
+    private readonly ILogger _inner;
+
+    public LoggerWrapper(ILogger inner)
+    {
+        _inner = inner;
+    }
+    
+    public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+    {
+        return _inner.BeginScope(state);
+    }
+
+    public bool IsEnabled(LogLevel logLevel)
+    {
+        return _inner.IsEnabled(logLevel);
+    }
+
+    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    {
+        _inner.Log(logLevel, eventId, state, exception, formatter);
+        LogEvent?.Invoke(this, formatter(state, exception));
+    }
+    
+    public event EventHandler<string>? LogEvent;
+}
+
+public class LDKWalletLogger : LDKLogger
+{
+    public LDKWalletLogger(LDKWalletLoggerFactory ldkWalletLoggerFactory) : base(ldkWalletLoggerFactory)
     {
     }
 }
 
 public class LDKLogger : LoggerInterface, ILogger
 {
-    private readonly ILogger _logger;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly ILogger _baseLogger;
 
-    public LDKLogger(ILogger logger)
+    public LDKLogger(ILoggerFactory loggerFactory)
     {
-        _logger = logger;
-    }
-    public LDKLogger(ILoggerFactory loggerFactory):this(loggerFactory.CreateLogger("LDK"))
-    {
-        
+        _loggerFactory = loggerFactory;
+        _baseLogger = loggerFactory.CreateLogger("");
     }
 
-    public void log(Record record)
+    public virtual void log(Record record)
     {
         var level = record.get_level() switch
         {
@@ -61,22 +95,22 @@ public class LDKLogger : LoggerInterface, ILogger
             Level.LDKLevel_Error => LogLevel.Error,
             Level.LDKLevel_Gossip => LogLevel.Trace,
         };
-        _logger.Log(level, $"[{record.get_module_path()}] {record.get_args()}");
+        _loggerFactory.CreateLogger(record.get_module_path()).Log(level, "{Args}", record.get_args());
     }
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
     {
-        return _logger.BeginScope(state);
+        return _baseLogger.BeginScope(state);
     }
 
     public bool IsEnabled(LogLevel logLevel)
-    
     {
-        return _logger.IsEnabled(logLevel);
+        return _baseLogger.IsEnabled(logLevel);
     }
 
-    public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+    public virtual void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+        Func<TState, Exception?, string> formatter)
     {
-        _logger.Log(logLevel, eventId, state, exception, formatter);
+        _baseLogger.Log(logLevel, eventId, state, exception, formatter);
     }
 }

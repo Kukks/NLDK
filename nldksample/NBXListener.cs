@@ -10,7 +10,7 @@ public class NBXListener : IHostedService
     private readonly WalletService _walletService;
     private readonly ILogger<NBXListener> _logger;
     private readonly Network _network;
-    private WebsocketNotificationSession _session;
+    private WebsocketNotificationSession? _session;
 
     public NBXListener(ExplorerClient explorerClient, WalletService walletService, ILogger<NBXListener> logger, Network network)
     {
@@ -28,7 +28,7 @@ public class NBXListener : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        Task.Run(async () =>
+        _ = Task.Run(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
             {
@@ -41,7 +41,8 @@ public class NBXListener : IHostedService
                     var factory = new DerivationStrategyFactory(_network);
                     foreach (var wallet in ws)
                     {
-                        var wts = new WalletTrackedSource(wallet.Id);
+                        var wts = new GroupTrackedSource(wallet.Id);
+                        var child = new List<TrackedSource>();
                         foreach (var alias in wallet.AliasWalletName)
                         {
                             try
@@ -49,15 +50,21 @@ public class NBXListener : IHostedService
                                var ds =  factory.Parse(alias);
                                var dts = new DerivationSchemeTrackedSource(ds);
                                
-                               await _explorerClient.TrackAsync(dts, new TrackWalletRequest()
-                               {
-                                   ParentWallet = wts
-                               }, lcts.Token);
+                               await _explorerClient.TrackAsync(dts,null, lcts.Token);
+                               child.Add(dts);
+                               
                             }
                             catch (Exception e)
                             {
+                                // ignored
                             }
                         }
+
+                        await _explorerClient.AddGroupChildrenAsync(wts.GroupId, child.Select(source => new GroupChild()
+                        {
+                            TrackedSource = source.ToString(),
+                            CryptoCode = "BTC"
+                        }).ToArray(), lcts.Token);
                     }
                     _session = await _explorerClient.CreateWebsocketNotificationSessionAsync(cancellationToken);
                     await _session.ListenAllTrackedSourceAsync(cancellation: cancellationToken);
@@ -121,6 +128,6 @@ public class NBXListener : IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await _session.DisposeAsync(cancellationToken);
+        await (_session?.DisposeAsync(cancellationToken)?? Task.CompletedTask);
     }
 }

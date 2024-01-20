@@ -12,12 +12,8 @@ public static class ChannelManagerHelper
         var monitorFundingSet = new HashSet<OutPoint>();
         return channelMonitorsSerialized.Select(bytes =>
         {
-            var res =
-                UtilMethods.C2Tuple_ThirtyTwoBytesChannelMonitorZ_read(bytes, entropySource,
-                        signerProvider) as
-                    Result_C2Tuple_ThirtyTwoBytesChannelMonitorZDecodeErrorZ.
-                    Result_C2Tuple_ThirtyTwoBytesChannelMonitorZDecodeErrorZ_OK;
-            if (res is null)
+            if (UtilMethods.C2Tuple_ThirtyTwoBytesChannelMonitorZ_read(bytes, entropySource,
+                    signerProvider) is not Result_C2Tuple_ThirtyTwoBytesChannelMonitorZDecodeErrorZ.Result_C2Tuple_ThirtyTwoBytesChannelMonitorZDecodeErrorZ_OK res)
             {
                 throw new SerializationException("Serialized ChannelMonitor was corrupt");
             }

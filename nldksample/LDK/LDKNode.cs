@@ -25,7 +25,7 @@ public class LDKNode : IAsyncDisposable, IHostedService
 
     public PubKey NodeId => new(_channelManager.get_our_node_id());
     
-    public BTCPayServer.Lightning.NodeInfo? NodeInfo => _peerHandler.Endpoint is null ? null :  NodeInfo.Parse($"{NodeId}@{_peerHandler.Endpoint}");
+    public NodeInfo? NodeInfo => _peerHandler.Endpoint is null ? null :  NodeInfo.Parse($"{NodeId}@{_peerHandler.Endpoint}");
     
 
     public event EventHandler OnDisposing;
@@ -39,14 +39,12 @@ public class LDKNode : IAsyncDisposable, IHostedService
     {
         await _currentWalletService.WalletSelected.Task;
 
-        _logger.LogInformation("Wallet selected, starting LDKNode");
         await Semaphore.WaitAsync(cancellationToken);
         var exists = _started is not null;
         _started ??= new TaskCompletionSource();
         Semaphore.Release();
         if (exists)
         {
-            _logger.LogInformation("LDKNode already started, will not run start again");
             await _started.Task;
             return;
         }
