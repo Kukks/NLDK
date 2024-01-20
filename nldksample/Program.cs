@@ -22,7 +22,11 @@ builder.Services
     .Configure<NLDKOptions>(builder.Configuration)
     .AddHostedService<MigratonHostedService>()
     .AddHostedService<NBXListener>(provider => provider.GetRequiredService<NBXListener>())
-    .AddSingleton<AsyncKeyedLocker<string>>()
+    .AddSingleton(new AsyncKeyedLocker<string>(o =>
+    {
+        o.PoolSize = 20;
+        o.PoolInitialFill = 1;
+    }))
     .AddSingleton<WalletService>()
     .AddLDK()
     .AddSingleton<NBXListener>()

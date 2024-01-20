@@ -1,4 +1,5 @@
 ﻿using System.Threading.Channels;
+using AsyncKeyedLock;
 using NBitcoin;
 using org.ldk.structs;
 using EventHandler = System.EventHandler;
@@ -33,16 +34,18 @@ public class LDKNode : IAsyncDisposable, IHostedService
 
     public IServiceProvider ServiceProvider { get; }
     private TaskCompletionSource? _started = null;
-    private static readonly SemaphoreSlim Semaphore = new(1, 1);
+    private static readonly AsyncNonKeyedLocker Semaphore = new(1);
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         await _currentWalletService.WalletSelected.Task;
 
-        await Semaphore.WaitAsync(cancellationToken);
-        var exists = _started is not null;
-        _started ??= new TaskCompletionSource();
-        Semaphore.Release();
+        bool exists;
+        using (await Semaphore.LockAsync(cancellationToken))
+        {
+            exists = _started is not null;
+            _started ??= new TaskCompletionSource();
+        }
         if (exists)
         {
             await _started.Task;
@@ -63,9 +66,11 @@ public class LDKNode : IAsyncDisposable, IHostedService
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
-        await Semaphore.WaitAsync(cancellationToken);
-        var exists = _started is not null;
-        Semaphore.Release();
+        bool exists;
+        using (await Semaphore.LockAsync(cancellationToken))
+        {
+            exists = _started is not null;
+        }
         if (!exists)
             return;
 
