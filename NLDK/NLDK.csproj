@@ -8,7 +8,7 @@
 
 
     <ItemGroup>
-        <PackageReference Include="AsyncKeyedLock" Version="6.2.4" />
+        <PackageReference Include="AsyncKeyedLock" Version="6.3.3" />
         <PackageReference Include="FlexLabs.EntityFrameworkCore.Upsert" Version="8.0.0" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.0">
           <PrivateAssets>all</PrivateAssets>

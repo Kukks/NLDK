@@ -1,4 +1,5 @@
-﻿using NBitcoin;
+﻿using AsyncKeyedLock;
+using NBitcoin;
 using NBXplorer.Models;
 using NLDK;
 using org.ldk.structs;
@@ -15,7 +16,7 @@ public class CurrentWalletService
     {
         _walletService = walletService;
     }
-    
+
     public void SetWallet(Wallet wallet)
     {
         if (_wallet is not null)
@@ -31,7 +32,7 @@ public class CurrentWalletService
         //     
         // });
         WalletSelected.SetResult();
-        
+
     }
 
     public byte[] Seed { get; private set; }
@@ -40,12 +41,12 @@ public class CurrentWalletService
     {
         get
         {
-            if(_wallet is null)
+            if (_wallet is null)
                 throw new InvalidOperationException("No wallet selected");
             return _wallet.Id;
         }
     }
-    
+
     public TaskCompletionSource WalletSelected { get; } = new();
 
     // public bool IsThisWallet(TrackedSource trackedSource)
@@ -56,17 +57,17 @@ public class CurrentWalletService
     // }
 
     private ChannelMonitor[]? _channels = null;
-    private readonly SemaphoreSlim _ss = new(1,1);
+    private readonly AsyncNonKeyedLocker _ss = new(1);
     public ChannelMonitor[] GetInitialChannelMonitors(EntropySource entropySource, SignerProvider signerProvider)
     {
-        _ss.Wait();
-
-        if (_channels is null)
+        using (_ss.Lock())
         {
-            var data = _wallet.Channels?.Select(c => c.Data)?.ToArray() ?? Array.Empty<byte[]>();
-            _channels =  ChannelManagerHelper.GetInitialMonitors(data, entropySource, signerProvider);
+            if (_channels is null)
+            {
+                var data = _wallet.Channels?.Select(c => c.Data)?.ToArray() ?? Array.Empty<byte[]>();
+                _channels = ChannelManagerHelper.GetInitialMonitors(data, entropySource, signerProvider);
+            }
+            return _channels;
         }
-        _ss.Release();
-        return _channels;
     }
 }
