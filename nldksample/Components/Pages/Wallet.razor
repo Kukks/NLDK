@@ -1,4 +1,4 @@
-﻿@page "/wallets/{walletId}"
+@page "/wallets/{walletId}"
 @using NLDK
 @using Newtonsoft.Json
 @using Script = NBitcoin.Script
@@ -23,7 +23,7 @@
 else
 {
     <div class="d-flex"> <h3>Wallet @WalletData.Name</h3> <a href="/wallets/@WalletId/logs">Logs</a></div>
-   
+
     <span>Total balance: @Balance</span>
     <ul>
         @foreach (var s in WalletData.Scripts)
@@ -49,16 +49,14 @@ else
 
     @if (_node is not null)
     {
-
-
         <h4 class="mt-4">Node Info</h4>
         if (_node.NodeInfo is not null)
         {
-            <div>Node URI: @_node.NodeInfo.ToString()</div>
+            <div>@_node.NodeInfo.ToString()</div>
         }
         else
         {
-            <div>Pubkey: @_node.NodeId.ToString()</div>
+            <div>@_node.NodeId.ToString()</div>
         }
 
         <h4 class="mt-4">Peers</h4>
@@ -68,7 +66,7 @@ else
                 @foreach (var peer in _peers)
                 {
                     <li>
-                        @peer 
+                        @peer
                         <ul>
                             <li>peer channels</li>
                             @foreach (var channel in _channels?.Where(details => new PubKey(details.get_counterparty().get_node_id()) == peer.NodeId ))
@@ -81,13 +79,13 @@ else
                                     <button @onclick="() => CloseChannel(channel, false)">Close </button>
                                     <button @onclick="() => CloseChannel(channel, true)">Force Close </button>
                                 </li>
-                           
+
                             }
-                            <li>Open channel 
-                                <input type="number" @bind="OpenChannelAmt" max="@Balance"/> 
+                            <li>Open channel
+                                <input type="number" @bind="OpenChannelAmt" max="@Balance"/>
                                 <button @onclick="() => OpenChannel(peer.NodeId, OpenChannelAmt)">
                                     Open channel
-                                </button> 
+                                </button>
                             </li>
                         </ul>
                     </li>
@@ -142,7 +140,6 @@ else
 
     public async Task OpenChannel(PubKey nodeId, decimal amt)
     {
-        
         var userConfig = _node.ServiceProvider.GetRequiredService<UserConfig>();
         _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogInformation($"Attempt to open channel of {amt} to {nodeId}");
 
@@ -157,14 +154,29 @@ else
         }
     }
 
-
     private IEnumerable<Coin>? UnspentCoins => WalletData?.Scripts.Where(walletScript => walletScript.DerivationPath is not null).SelectMany(script => script.Script.Coins).Where(coin => coin.SpendingTransactionHash is null);
 
-    [Parameter] public string WalletId { get; set; }
+    [Parameter]
+    public string WalletId { get; set; }
+
     private NLDK.Wallet? WalletData { get; set; }
+    private decimal SendValue { get; set; }
+    private string? SendDest { get; set; }
+    private string? ConnectPeer { get; set; }
+    private decimal OpenChannelAmt { get; set; }
 
     protected override Task OnParametersSetAsync()
     {
+        _node = null;
+        _peerManager = null;
+        _peers = null;
+        _channelManager = null;
+        _channels = null;
+        SendValue = 0;
+        SendDest = null;
+        ConnectPeer = null;
+        OpenChannelAmt = 0;
+
         _ = Fetch();
         return base.OnParametersSetAsync();
     }
@@ -175,12 +187,12 @@ else
         {
             WalletData = task.Result;
             _node = await NodeManager.GetLDKNodeForWallet(WalletData);
-            
+
             if (_node is not null)
             {
                 _peerManager = _node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
                 _peers = _peerManager.GetPeerNodeIds();
-                    _channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+                _channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
                 _channels = _channelManager.list_channels().ToList();
             }
             await InvokeAsync(StateHasChanged);
@@ -193,11 +205,6 @@ else
         await Fetch();
     }
 
-    private decimal SendValue { get; set; }
-    private string? SendDest { get; set; }
-    private string? ConnectPeer { get; set; }
-    private decimal OpenChannelAmt { get; set; }
-
     private async Task Send()
     {
         if (string.IsNullOrEmpty(SendDest))
@@ -208,7 +215,6 @@ else
         SendDest = SendDest.Trim();
         var addr = BitcoinAddress.Create(SendDest, ExplorerClient.Network.NBitcoinNetwork);
         var feeRate = await ExplorerClient.GetFeeRateAsync(1, new FeeRate(100m));
-
         var tx = await WalletService.CreateTransaction(WalletId, new List<TxOut>()
         {
             new TxOut(Money.Coins(SendValue), addr.ScriptPubKey)
@@ -239,20 +245,18 @@ else
     // }
     //
     private Task CloseChannel(ChannelDetails channel, bool force)
-     {
-         var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
+    {
+        var channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
         var nodeId = channel.get_counterparty().get_node_id();
         var channelId = channel.get_channel_id();
-         var result = force ? 
+        var result = force ?
            channelManager.force_close_broadcasting_latest_txn(channelId, nodeId) :
            channelManager.close_channel(channelId, nodeId);
-    
+
          if (result is Result_NoneAPIErrorZ.Result_NoneAPIErrorZ_Err error)
          {
              _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().Log(LogLevel.Error, $"Error{(force? " force": "")} closing channel: {error.err.GetError()} ");
          }
          return Task.CompletedTask;
-         
     }
-
 }

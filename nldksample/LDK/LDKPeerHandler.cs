@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using NBitcoin;
@@ -16,7 +16,6 @@ public class LDKPeerHandler : IScopedHostedService
     private CancellationTokenSource? _cts;
 
     readonly ConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
-
 
     public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger, ChannelManager channelManager)
     {
@@ -56,7 +55,7 @@ public class LDKPeerHandler : IScopedHostedService
         using var listener = new TcpListener(new IPEndPoint(IPAddress.Any, 0));
         listener.Start();
         var ip = listener.LocalEndpoint;
-        Endpoint = new IPEndPoint(IPAddress.Loopback, (int) ip.Port());
+        Endpoint = new IPEndPoint(IPAddress.Loopback, (int)ip.Port());
         while (!cancellationToken.IsCancellationRequested)
         {
             var result = LDKTcpDescriptor.Inbound(_peerManager, await listener.AcceptTcpClientAsync(cancellationToken),
@@ -82,7 +81,7 @@ public class LDKPeerHandler : IScopedHostedService
     {
         if (_channelManager.get_our_node_id() == theirNodeId.ToBytes())
             return null;
-        
+
         var client = new TcpClient();
         await client.ConnectAsync(remote.IPEndPoint(), cancellationToken);
         var result = LDKTcpDescriptor.Outbound(_peerManager, client, _logger, theirNodeId, _descriptors);

@@ -34,19 +34,18 @@ public class LDKNodeManager : IHostedService, IDisposable
             return null;
         return await GetLDKNodeForWallet(wallet, cancellationToken);
     }
-    
+
     public async Task<LDKNode> GetLDKNodeForWallet(Wallet wallet, CancellationToken cancellationToken = default)
     {
-        
         var result = Nodes.GetOrAdd(wallet.Id, s =>
         {
             _logger.LogInformation($"Creating LDKNode for wallet {wallet.Id}");
 
             var scope = _serviceScopeFactory.CreateScope();
-            
+
             _logger.LogInformation($"Scope for wallet {wallet.Id} created");
             scope.ServiceProvider.GetRequiredService<CurrentWalletService>().SetWallet(wallet);
-            
+
             var node = scope.ServiceProvider.GetRequiredService<LDKNode>();
             node.OnDisposing += (sender, args) =>
             {
@@ -65,10 +64,9 @@ public class LDKNodeManager : IHostedService, IDisposable
     public async Task StartAsync(CancellationToken cancellationToken)
     {
         Data = (await _walletService.GetArbitraryData(null, cancellationToken)).ToImmutableDictionary();
-        
+
         Task.Run(async () =>
         {
-            
             await _explorerClient.WaitServerStartedAsync(cancellationToken);
             var wallets = await _walletService.GetAll(cancellationToken);
             await Task.WhenAll(

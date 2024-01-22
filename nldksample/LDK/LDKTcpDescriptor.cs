@@ -15,7 +15,6 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
     private readonly CancellationTokenSource _cts;
 
     public SocketDescriptor SocketDescriptor { get; set; }
-
     public string Id { get; set; }
     readonly SemaphoreSlim _readSemaphore = new(1, 1);
 
@@ -47,7 +46,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
 
         if (result.is_ok())
         {
-            logger.LogInformation("New outbounf connection accepted");
+            logger.LogInformation("New outbound connection accepted");
             return descriptor;
         }
         descriptor.disconnect_socket();
@@ -67,7 +66,6 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         _cts = new CancellationTokenSource();
         _ = CheckConnection(_cts.Token);
         _ = ReadEvents(_cts.Token);
-        
     }
 
     private async Task CheckConnection(CancellationToken cancellationToken)
@@ -78,13 +76,13 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             {
                 await Task.Delay(1000, cancellationToken);
             }
-
             catch(OperationCanceledException)
             {
             }
         }
         disconnect_socket();
     }
+
     private async Task ReadEvents(CancellationToken cancellationToken)
     {
         var first = true;
@@ -93,10 +91,9 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         await _readSemaphore.WaitAsync(cancellationToken);
         while (_tcpClient.Connected && !_cts.IsCancellationRequested)
         {
-            if(first)
+            if (first)
             {
                 first = false;
-               
             }
             else
             {
@@ -109,11 +106,11 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             }
 
             var data = buffer[..read];
-                
             var pause = _peerManager.read_event(SocketDescriptor, data) is Result_boolPeerHandleErrorZ.Result_boolPeerHandleErrorZ_OK
             {
                 res: true
             };
+
             _peerManager.process_events();
             if (pause)
             {
@@ -122,20 +119,20 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             }
 
             Resume();
-            
         }
-        
     }
+
     private void Resume()
-    { try
+    {
+        try
         {
-                
             _readSemaphore.Release();
-                
+
             _logger.LogInformation("resuming read");
         }
-        catch (Exception e)
+        catch (Exception)
         {
+            // ignored
         }
     }
 
@@ -143,11 +140,10 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
     {
         try
         {
-            _logger.LogInformation($"sending {data.Length}bytes of data to peer");
+            _logger.LogInformation("sending {Bytes} bytes of data to peer", data.Length);
+
             var result = _tcpClient.Client.Send(data);
-            
-            
-            _logger.LogInformation($"Sent {result}bytes of data to peer");
+            _logger.LogInformation("Sent {Bytes} bytes of data to peer", result);
             if (resume_read)
             {
                 Resume();
@@ -155,12 +151,11 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
 
             return result;
         }
-        catch (Exception e)
+        catch (Exception)
         {
             disconnect_socket();
             return 0;
         }
-
     }
 
     public void disconnect_socket()
@@ -175,7 +170,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         _stream.Dispose();
         _tcpClient.Dispose();
         _peerManager.socket_disconnected(SocketDescriptor);
-        
+
         _onDisconnect(Id);
     }
 
