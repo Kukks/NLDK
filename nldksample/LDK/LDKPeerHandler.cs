@@ -89,7 +89,7 @@ public class LDKPeerHandler : IScopedHostedService
     public async Task<LDKTcpDescriptor?> ConnectAsync(PubKey theirNodeId, EndPoint remote,
         CancellationToken cancellationToken = default)
     {
-        if (_channelManager.get_our_node_id() == theirNodeId.ToBytes())
+        if (_channelManager.get_our_node_id().SequenceEqual(theirNodeId.ToBytes()))
             return null;
 
         var client = new TcpClient();
