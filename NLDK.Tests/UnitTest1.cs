@@ -66,13 +66,13 @@ public class UnitTest1
 
         var wallet1PeerHandler = wallet1Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
         var wallet2PeerHandler = wallet2Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
-        LDKSTcpDescriptor? wallet1Peer = null;
-        
+        LDKTcpDescriptor? wallet1Peer = null;
+
         while(wallet1Peer is null)
         {
             wallet1Peer = await wallet1PeerHandler.ConnectAsync(wallet2Node.NodeInfo);
         }
-        
+
     }
 
 
