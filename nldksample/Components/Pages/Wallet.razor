@@ -1,4 +1,4 @@
-@page "/wallets/{walletId}"
+﻿@page "/wallets/{walletId}"
 @using NLDK
 @using Newtonsoft.Json
 @using Script = NBitcoin.Script
@@ -192,6 +192,11 @@ else
             {
                 _peerManager = _node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
                 _peers = _peerManager.GetPeerNodeIds();
+                _peerManager.OnPeersChange += async (sender, args) =>
+                {
+                    _peers = args.PeerNodeIds;
+                    await InvokeAsync(StateHasChanged);
+                };
                 _channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
                 _channels = _channelManager.list_channels().ToList();
             }

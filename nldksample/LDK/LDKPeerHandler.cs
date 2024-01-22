@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using NBitcoin;
@@ -15,6 +15,8 @@ public class LDKPeerHandler : IScopedHostedService
     private readonly ChannelManager _channelManager;
     private CancellationTokenSource? _cts;
 
+    public event EventHandler<PeersChangedEventArgs> OnPeersChange;
+
     readonly ConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
 
     public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger, ChannelManager channelManager)
@@ -28,8 +30,16 @@ public class LDKPeerHandler : IScopedHostedService
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ = ListenForInboundConnections(_cts.Token);
-        _ = PeriodicTicker(_cts.Token, 10000, () => _peerManager.timer_tick_occurred());
-        _ = PeriodicTicker(_cts.Token, 1000, () => _peerManager.process_events());
+        _ = PeriodicTicker(_cts.Token, 1000, () =>  _peerManager.process_events());
+        _ = PeriodicTicker(_cts.Token, 10000, () => {
+            var prevPeerIds = GetPeerNodeIds();
+            _peerManager.timer_tick_occurred();
+            var currPeerIds = GetPeerNodeIds();
+            if (!prevPeerIds.SequenceEqual(currPeerIds))
+            {
+                OnPeersChange.Invoke(this, new PeersChangedEventArgs(currPeerIds));
+            }
+        });
     }
 
     private async Task PeriodicTicker(CancellationToken cancellationToken, int ms, Action action)
@@ -102,5 +112,15 @@ public class LDKPeerHandler : IScopedHostedService
             EndPointParser.TryParse(addr, 9735, out var endpoint);
             return new NodeInfo(pubKey, endpoint.Host(), endpoint.Port().Value);
         }).ToList();
+    }
+}
+
+public class PeersChangedEventArgs : EventArgs
+{
+    public List<NodeInfo> PeerNodeIds { get; set; }
+
+    public PeersChangedEventArgs(List<NodeInfo> peerNodeIds)
+    {
+        PeerNodeIds = peerNodeIds;
     }
 }
