@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using NBitcoin;
 using org.ldk.structs;
@@ -76,10 +76,11 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             {
                 await Task.Delay(1000, cancellationToken);
             }
-            catch(OperationCanceledException)
+            catch (OperationCanceledException)
             {
             }
         }
+        _logger.LogWarning("Failed connection check");
         disconnect_socket();
     }
 
@@ -153,6 +154,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         }
         catch (Exception)
         {
+            _logger.LogWarning("Failed to send data");
             disconnect_socket();
             return 0;
         }

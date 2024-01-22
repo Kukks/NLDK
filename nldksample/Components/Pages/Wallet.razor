@@ -229,12 +229,7 @@ else
 
     private async Task ConnectToPeer()
     {
-        if (_node == null || string.IsNullOrEmpty(ConnectPeer))
-        {
-            return;
-        }
-
-        if (!BTCPayServer.Lightning.NodeInfo.TryParse(ConnectPeer, out var nodeInfo))
+        if (_node == null || string.IsNullOrEmpty(ConnectPeer) || !BTCPayServer.Lightning.NodeInfo.TryParse(ConnectPeer, out var nodeInfo))
         {
             return;
         }
