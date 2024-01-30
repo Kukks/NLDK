@@ -46,7 +46,7 @@ public static class ChannelManagerHelper
 
         foreach (var monitor in channelMonitors)
         {
-            monitor.load_outputs_to_watch(filter);
+            monitor.load_outputs_to_watch(filter, logger);
         }
         return (resManager as Result_C2Tuple_ThirtyTwoBytesChannelManagerZDecodeErrorZ.Result_C2Tuple_ThirtyTwoBytesChannelManagerZDecodeErrorZ_OK)?.res.get_b();
     }

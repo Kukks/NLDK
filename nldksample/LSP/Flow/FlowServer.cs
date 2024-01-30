@@ -385,7 +385,7 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
                             //     
                             var result = _channelManager.create_channel(proposal.NodeId.ToBytes(),
                                 proposal.ChannelSizeToOpen.MilliSatoshi, proposal.ChannelOutbound.MilliSatoshi,
-                                new UInt128(Convert.FromHexString(proposal.UserChannelId)),
+                                new UInt128(Convert.FromHexString(proposal.UserChannelId)), Option_ThirtyTwoBytesZ.none(), 
                                 _userConfig);
 
                             if (result is Result_ThirtyTwoBytesAPIErrorZ.Result_ThirtyTwoBytesAPIErrorZ_Err errx)

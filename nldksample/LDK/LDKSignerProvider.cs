@@ -34,7 +34,7 @@ public class LDKSignerProvider : SignerProviderInterface
         return _innerSigner.read_chan_signer(reader);
     }
 
-    public Result_CVec_u8ZNoneZ get_destination_script()
+    public Result_CVec_u8ZNoneZ get_destination_script(byte[] channel_keys_id)
     {
         var script = _walletService.DeriveScript(_walletId).GetAwaiter().GetResult();
         return Result_CVec_u8ZNoneZ.ok(script.ToScript().ToBytes());
@@ -51,7 +51,10 @@ public class LDKSignerProvider : SignerProviderInterface
 
 
         var witnessParams = PayToWitTemplate.Instance.ExtractScriptPubKeyParameters2(s);
-        var result=  ShutdownScript.new_witness_program(new WitnessVersion((byte) witnessParams.Version), witnessParams.Program) as  Result_ShutdownScriptInvalidShutdownScriptZ.Result_ShutdownScriptInvalidShutdownScriptZ_OK;
-        return Result_ShutdownScriptNoneZ.ok(result.res);
+        var result = ShutdownScript.new_witness_program(new WitnessProgram(witnessParams.Program,
+            new WitnessVersion((byte) witnessParams.Version)));
+        if(result is Result_ShutdownScriptInvalidShutdownScriptZ.Result_ShutdownScriptInvalidShutdownScriptZ_OK ok)
+            return Result_ShutdownScriptNoneZ.ok(ok.res);
+        return Result_ShutdownScriptNoneZ.err();
     }
 }

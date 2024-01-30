@@ -104,6 +104,7 @@ var channelResult = wallet1ChannelManager.create_channel(
     Money.Coins(0.5m).Satoshi, 
     0,
     userChannelId, 
+    Option_ThirtyTwoBytesZ.none(), 
     wallet1UserConfig);
 
 while(wallet1ChannelManager.list_channels().Length == 0)

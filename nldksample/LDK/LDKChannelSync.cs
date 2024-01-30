@@ -31,19 +31,18 @@ public class LDKChannelSync : IScopedHostedService
     {
         var txs1 = _confirms.SelectMany(confirm => confirm.get_relevant_txids().Select(zz =>
             (TransactionId: new uint256(zz.get_a()),
-                Block: zz.get_b() is Option_ThirtyTwoBytesZ.Option_ThirtyTwoBytesZ_Some some
+                Height: zz.get_b() ,
+                Block: zz.get_c() is Option_ThirtyTwoBytesZ.Option_ThirtyTwoBytesZ_Some some
                     ? new uint256(some.some)
                     : null)));
 
-        Dictionary<uint256, uint256?> txs = new();
-        foreach (var (transactionId, block) in txs1)
+        Dictionary<uint256, uint256?> txsToBlockHash = new();
+        foreach (var (transactionId, height, block)  in txs1)
         {
-            if (txs.TryAdd(transactionId, block)) continue;
-            if (block is not null)
-                txs[transactionId] = block;
+            txsToBlockHash.TryAdd(transactionId, block);
         }
 
-        var txsFetch = await Task.WhenAll(txs.Keys.Select(
+        var txsFetch = await Task.WhenAll(txsToBlockHash.Keys.Select(
             uint256 =>
                 _explorerClient.GetTransactionAsync(uint256, cancellationToken)));
 
@@ -58,9 +57,9 @@ public class LDKChannelSync : IScopedHostedService
         Dictionary<uint256, List<TwoTuple_usizeTransactionZ>> confirmedTxList = new();
         foreach (var transactionResult in txsFetch)
         {
-            var tx = txs[transactionResult.TransactionHash];
+            var txBlockHash = txsToBlockHash[transactionResult.TransactionHash];
 
-            if (tx is not null && transactionResult.Confirmations == 0 || transactionResult.TransactionHash != tx)
+            if (txBlockHash is not null && (transactionResult.Confirmations == 0 || transactionResult.BlockId != txBlockHash))
             {
                 foreach (var confirm in _confirms)
                 {

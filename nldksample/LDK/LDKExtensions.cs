@@ -55,12 +55,19 @@ public static class LDKExtensions
         };
     }
     
+    public class LDKEntropySource:EntropySourceInterface
+    {
+        public byte[] get_secure_random_bytes()
+        {
+            return RandomUtils.GetBytes(32);
+        }
+    }
+
     public static IServiceCollection AddLDK(this IServiceCollection services)
     {
         services.AddScoped<CurrentWalletService>();
         services.AddScoped<KeysManager>(provider => KeysManager.of(provider.GetRequiredService<CurrentWalletService>().Seed, DateTimeOffset.Now.ToUnixTimeSeconds(),
             RandomUtils.GetInt32()));
-        services.AddScoped(provider => provider.GetRequiredService<KeysManager>().as_EntropySource());
         services.AddScoped(provider => provider.GetRequiredService<KeysManager>().as_NodeSigner());
         services.AddScoped<LDKPersister>();
         services.AddScoped<Persister>(provider =>
@@ -100,7 +107,7 @@ public static class LDKExtensions
         services.AddScoped<LDKNode>();
         services.AddSingleton(provider => P2PGossipSync.of(provider.GetRequiredService<NetworkGraph>(), Option_UtxoLookupZ.none(), provider.GetGlobalLDKLogger()));
         services.AddSingleton(provider => GossipSync.p2_p(provider.GetRequiredService<P2PGossipSync>()));
-        services.AddSingleton(provider => DefaultMessageRouter.of());
+        services.AddSingleton(provider => DefaultMessageRouter.of(provider.GetRequiredService<NetworkGraph>(),provider.GetRequiredService<EntropySource>()));
         services.AddSingleton(provider => provider.GetRequiredService<P2PGossipSync>().as_RoutingMessageHandler());
         services.AddSingleton(provider =>  provider.GetRequiredService<DefaultMessageRouter>().as_MessageRouter());
         services.AddSingleton(provider =>  IgnoringMessageHandler.of().as_CustomOnionMessageHandler());
@@ -210,6 +217,8 @@ public static class LDKExtensions
         });
         
         
+        services.AddSingleton<LDKEntropySource>();
+        services.AddSingleton<EntropySource>(provider => EntropySource.new_impl(provider.GetRequiredService<LDKEntropySource>()));
         services.AddSingleton<ProbabilisticScoringDecayParameters>(provider => ProbabilisticScoringDecayParameters.with_default());
         services.AddSingleton<ProbabilisticScorer>(provider =>
         {
@@ -226,7 +235,7 @@ public static class LDKExtensions
                 provider.GetRequiredService<NetworkGraph>(), logger);
         });
         services.AddSingleton<DefaultRouter>(provider => DefaultRouter.of(provider.GetRequiredService<NetworkGraph>(),
-            provider.GetGlobalLDKLogger(), RandomUtils.GetBytes(32),
+            provider.GetGlobalLDKLogger(),provider.GetRequiredService<EntropySource>(),
             provider.GetRequiredService<LockableScore>(),
             ProbabilisticScoringFeeParameters.with_default()));
         services.AddSingleton<Router>(provider => provider.GetRequiredService<DefaultRouter>().as_Router());

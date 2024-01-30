@@ -19,9 +19,9 @@ public class LDKFeeEstimator : FeeEstimatorInterface
         var targetBlocks = confirmation_target switch
         {
             ConfirmationTarget.LDKConfirmationTarget_OnChainSweep => 30, // High priority (10-50 blocks)
-            ConfirmationTarget
-                    .LDKConfirmationTarget_MaxAllowedNonAnchorChannelRemoteFee =>
-                20, // Moderate to high priority (small multiple of high-priority estimate)
+            // ConfirmationTarget
+            //         .LDKConfirmationTarget_MaxAllowedNonAnchorChannelRemoteFee =>
+            //     20, // Moderate to high priority (small multiple of high-priority estimate)
             ConfirmationTarget
                     .LDKConfirmationTarget_MinAllowedAnchorChannelRemoteFee =>
                 12, // Moderate priority (long-term mempool minimum or medium-priority)

@@ -39,6 +39,12 @@ public class LDKCoinSelector : CoinSelectionSourceInterface
         return Result_CoinSelectionNoneZ.ok(CoinSelection.of(utxos, changeTxOut is null ? Option_TxOutZ.none() : Option_TxOutZ.some(changeTxOut.TxOut())));
     }
 
+    public Result_TransactionNoneZ sign_psbt(byte[] psbt)
+    {
+       var psbtParsed =  PSBT.Load(psbt, _network);
+       return sign_tx(psbtParsed.GetGlobalTransaction().ToBytes());
+    }
+
     public Result_TransactionNoneZ sign_tx(byte[] tx)
     {
         var tx1 =  Transaction.Load(tx, _network);
