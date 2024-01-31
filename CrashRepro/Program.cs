@@ -85,6 +85,9 @@ await explorerClient.RPCClient.GenerateAsync(1);
 
 while (wallet1Node.NodeInfo is null || wallet2Node.NodeInfo is null)
 {
+    Console.WriteLine($"Waiting until both nodes have ports assigned. " +
+                      $"Currently node1: {wallet1Node.NodeInfo?.ToString()??wallet1Node.NodeId.ToString()}" + 
+                      $"Currently node2: {wallet2Node.NodeInfo?.ToString()??wallet2Node.NodeId.ToString()}");
     await Task.Delay(100);
 }
 
@@ -94,11 +97,16 @@ LDKTcpDescriptor? wallet1Peer = null;
 
 while (wallet1Peer is null)
 {
+    Console.WriteLine("Attempting to connect node 1 to 2");
     wallet1Peer = await wallet1PeerHandler.ConnectAsync(wallet2Node.NodeInfo);
 }
+Console.WriteLine($"Connected, checking if Ldk agrees: {wallet1PeerHandler.GetPeerNodeIds().Any()}");
+
+
 var wallet1ChannelManager= wallet1Node.ServiceProvider.GetRequiredService<ChannelManager>();
 var wallet1UserConfig= wallet1Node.ServiceProvider.GetRequiredService<UserConfig>();
 var userChannelId = new UInt128(RandomUtils.GetBytes(16));
+Console.WriteLine($"Attempting to open a channel from node 1 to 2 of 0.5BTC with a user channel id {Convert.ToHexString(userChannelId.getLEBytes())}");
 var channelResult = wallet1ChannelManager.create_channel(
     wallet2Node.NodeId.ToBytes(), 
     Money.Coins(0.5m).Satoshi, 
@@ -109,6 +117,7 @@ var channelResult = wallet1ChannelManager.create_channel(
 
 while(wallet1ChannelManager.list_channels().Length == 0)
 {
+    Console.WriteLine("Waiting until ldk notices channel");
     await Task.Delay(100);
 }
 
