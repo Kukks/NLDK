@@ -363,9 +363,8 @@ public class FlowServer : ILDKEventHandler<Event.Event_HTLCIntercepted>,
                     {
                         _logger.LogInformation(
                             $"We intercepted an htlc with payment hash {@event.payment_hash} and we have a proposal for it but we don't have a connected peer. Let's connect to {proposal.NodeEndpoint}");
-                        var connected = _peerHandler
-                            .ConnectAsync(proposal.NodeId, proposal.NodeEndpoint, CancellationToken.None)
-                            .GetAwaiter().GetResult();
+                        var connected = await _peerHandler
+                            .ConnectAsync(proposal.NodeId, proposal.NodeEndpoint, CancellationToken.None);
                         if (connected is null)
                         {
                             _logger.LogInformation(

@@ -1,4 +1,6 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Net;
 using System.Net.Sockets;
 using NBitcoin;
@@ -17,7 +19,7 @@ public class LDKPeerHandler : IScopedHostedService
 
     public event EventHandler<PeersChangedEventArgs> OnPeersChange;
 
-    readonly ConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
+    readonly ObservableConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
 
     public LDKTcpDescriptor[] ActiveDescriptors => _descriptors.Values.ToArray();
     
@@ -33,14 +35,19 @@ public class LDKPeerHandler : IScopedHostedService
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ = ListenForInboundConnections(_cts.Token);
         _ = PeriodicTicker(_cts.Token, 1000, () =>  _peerManager.process_events());
-        _ = PeriodicTickerAsync(_cts.Token, 10000, async () => {
-            var prevPeerIds = await GetPeerNodeIds();
-            _peerManager.timer_tick_occurred();
-            var currPeerIds = await GetPeerNodeIds();
-            if (!prevPeerIds.SequenceEqual(currPeerIds))
+        _descriptors.CollectionChanged += DescriptorsOnCollectionChanged;
+    }
+
+    private void DescriptorsOnCollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        Task.Run(async () =>
+        {
+            if (e.Action == NotifyCollectionChangedAction.Add)
             {
-                OnPeersChange.Invoke(this, new PeersChangedEventArgs(currPeerIds));
+                await Task.Delay(2000);
             }
+            var nodes = await GetPeerNodeIds();
+            OnPeersChange?.Invoke(this, new PeersChangedEventArgs(nodes));
         });
     }
 
@@ -68,6 +75,8 @@ public class LDKPeerHandler : IScopedHostedService
 
         _logger.LogInformation("Stopping, disconnecting all peers");
         _peerManager.disconnect_all_peers();
+        
+        _descriptors.CollectionChanged -= DescriptorsOnCollectionChanged;
     }
 
     private async Task ListenForInboundConnections(CancellationToken cancellationToken = default)

@@ -23,7 +23,7 @@ public class LDKBroadcaster : BroadcasterInterfaceInterface
             var loadedTx = Transaction.Load(tx, _explorerClient.Network.NBitcoinNetwork);
             if(_broadcastGateKeepers.Any(gk => gk.DontBroadcast(loadedTx)))
                 continue;
-            Broadcast(loadedTx).GetAwaiter().GetResult();
+            _ = Broadcast(loadedTx);
         }
     }
 

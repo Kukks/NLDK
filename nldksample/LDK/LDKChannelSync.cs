@@ -130,13 +130,16 @@ public class LDKChannelSync : IScopedHostedService
 
     private void OnNewBlock(object? sender, NewBlockEvent e)
     {
-        var header = _explorerClient.RPCClient.GetBlockHeaderAsync(e.Hash, CancellationToken.None).GetAwaiter()
-            .GetResult();
-        var headerBytes = header.ToBytes();
-        foreach (var confirm in _confirms)
+        Task.Run(async () =>
         {
-            confirm.best_block_updated(headerBytes, e.Height);
-        }
+            var header =await  _explorerClient.RPCClient.GetBlockHeaderAsync(e.Hash, CancellationToken.None);
+            var headerBytes = header.ToBytes();
+            foreach (var confirm in _confirms)
+            {
+                confirm.best_block_updated(headerBytes, e.Height);
+            }
+        });
+
     }
 
 

@@ -45,8 +45,7 @@ public class LDKSpendableOutputsEventHandler : ILDKEventHandler<Event.Event_Spen
             outputs.Add((outpoint, txout, spendableOutputDescriptor.write()));
         }
 
-        _walletService.AddSpendableToCoin(_currentWalletService.CurrentWallet, outputs.ToArray()).GetAwaiter()
-            .GetResult();
+        await _walletService.AddSpendableToCoin(_currentWalletService.CurrentWallet, outputs.ToArray());
         //tried to do crazy stuff here, but it's not trivial and not all stuff i need is exposed in bindings (like chan_utils)
         // Sequence? sequence;
         // switch (spendableOutputDescriptor)

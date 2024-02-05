@@ -56,7 +56,7 @@ public class Flow2Client
         return JsonConvert.DeserializeObject<FlowFeeResponse>(content);
     }
 
-    public BOLT11PaymentRequest GetProposal(BOLT11PaymentRequest bolt11PaymentRequest, EndPoint? endPoint = null, string? feeId = null, CancellationToken cancellationToken = default)
+    public async Task<BOLT11PaymentRequest> GetProposal(BOLT11PaymentRequest bolt11PaymentRequest, EndPoint? endPoint = null, string? feeId = null, CancellationToken cancellationToken = default)
     {
         var path = "/api/v1/proposal";
         var request = new FlowProposalRequest()
@@ -67,11 +67,10 @@ public class Flow2Client
             FeeId = feeId,
             
         };
-        var response = _httpClient
-            .PostAsync(path, new StringContent(JsonConvert.SerializeObject(request)), cancellationToken).GetAwaiter()
-            .GetResult();
+        var response = await _httpClient
+            .PostAsync(path, new StringContent(JsonConvert.SerializeObject(request)), cancellationToken);
         response.EnsureSuccessStatusCode();
-        var content = response.Content.ReadAsStringAsync(cancellationToken).GetAwaiter().GetResult();
+        var content = await response.Content.ReadAsStringAsync(cancellationToken);
         var result = JsonConvert.DeserializeObject<FlowProposalResponse>(content);
 
         return BOLT11PaymentRequest.Parse(result.WrappedBolt11, _network);

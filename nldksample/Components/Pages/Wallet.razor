@@ -188,7 +188,7 @@ else
 
         try
         {
-            if (_peerManager != null) _peerManager.OnPeersChange -= PeerManagerOnOnPeersChange;
+            if (_peerManager != null) _peerManager.OnPeersChange += PeerManagerOnOnPeersChange;
         }
         catch (Exception e)
         {
@@ -279,8 +279,7 @@ else
 
     public void Dispose()
     {
-        _peerManager.OnPeersChange -= PeerManagerOnOnPeersChange;
-
+        if (_peerManager != null) _peerManager.OnPeersChange -= PeerManagerOnOnPeersChange;
     }
 
 }

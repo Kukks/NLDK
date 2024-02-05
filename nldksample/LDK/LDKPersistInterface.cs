@@ -20,6 +20,7 @@ public class LDKPersistInterface : PersistInterface
     public ChannelMonitorUpdateStatus persist_new_channel(OutPoint channel_id, ChannelMonitor data,
         MonitorUpdateId update_id)
     {
+        //TODO: store update id  so that we can do this async
         _walletService.AddOrUpdateChannel(new Channel()
         {
             WalletId = _walletId, FundingTransactionHash = new uint256(channel_id.get_txid()).ToString(),

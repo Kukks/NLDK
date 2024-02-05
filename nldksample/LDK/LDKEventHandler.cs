@@ -16,6 +16,9 @@ public class LDKEventHandler : EventHandlerInterface
     public void handle_event(Event _event)
     {
         _ldkWalletLogger.LogInformation($"Received event {_event.GetType()}");
-        _eventHandlers.AsParallel().ForAll(handler => handler.Handle(_event).GetAwaiter().GetResult());
+        _eventHandlers.AsParallel().ForAll(async handler =>
+        {
+            await handler.Handle(_event);
+        });
     }
 }

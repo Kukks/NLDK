@@ -18,7 +18,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
     public string Id { get; set; }
     readonly SemaphoreSlim _readSemaphore = new(1, 1);
 
-    public static LDKTcpDescriptor? Inbound(PeerManager peerManager, TcpClient tcpClient, ILogger logger, ConcurrentDictionary<string, LDKTcpDescriptor> descriptors)
+    public static LDKTcpDescriptor? Inbound(PeerManager peerManager, TcpClient tcpClient, ILogger logger, ObservableConcurrentDictionary<string, LDKTcpDescriptor> descriptors)
     {
         var descriptor = new LDKTcpDescriptor(peerManager, tcpClient, logger,s => descriptors.TryRemove(s, out _));
         var result = peerManager.new_inbound_connection(descriptor.SocketDescriptor, tcpClient.Client.GetSocketAddress());
@@ -33,7 +33,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
     }
 
     public static LDKTcpDescriptor? Outbound(PeerManager peerManager, TcpClient tcpClient, ILogger logger,
-        PubKey pubKey, ConcurrentDictionary<string, LDKTcpDescriptor> descriptors)
+        PubKey pubKey, ObservableConcurrentDictionary<string, LDKTcpDescriptor> descriptors)
     {
         var descriptor = new LDKTcpDescriptor(peerManager, tcpClient, logger, s => descriptors.TryRemove(s, out _));
         var result = peerManager.new_outbound_connection(pubKey.ToBytes(), descriptor.SocketDescriptor,
@@ -79,7 +79,6 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
             {
             }
         }
-        _logger.LogWarning("Failed connection check");
         disconnect_socket();
     }
 

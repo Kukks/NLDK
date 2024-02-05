@@ -26,13 +26,13 @@ public class LDKFundingGenerationReadyEventHandler: ILDKEventHandler<Event.Event
     }
     public async Task Handle(Event.Event_FundingGenerationReady eventFundingGenerationReady)
     {
-        var feeRate = _feeEstimator.GetFeeRate().GetAwaiter().GetResult();
+        var feeRate = await _feeEstimator.GetFeeRate();
         var txOuts = new List<TxOut>()
         {
             new(Money.Satoshis(eventFundingGenerationReady.channel_value_satoshis),
                 Script.FromBytesUnsafe(eventFundingGenerationReady.output_script))
         };
-        var tx = _walletService.CreateTransaction(_currentWalletService.CurrentWallet, txOuts, feeRate).GetAwaiter().GetResult();
+        var tx = await _walletService.CreateTransaction(_currentWalletService.CurrentWallet, txOuts, feeRate);
         if (tx is null)
         {
             _channelManager.close_channel(eventFundingGenerationReady.temporary_channel_id, eventFundingGenerationReady.counterparty_node_id);
