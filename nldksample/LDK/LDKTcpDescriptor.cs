@@ -21,8 +21,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
     public static LDKTcpDescriptor? Inbound(PeerManager peerManager, TcpClient tcpClient, ILogger logger, ConcurrentDictionary<string, LDKTcpDescriptor> descriptors)
     {
         var descriptor = new LDKTcpDescriptor(peerManager, tcpClient, logger,s => descriptors.TryRemove(s, out _));
-        var result = peerManager.new_inbound_connection(SocketDescriptor.new_impl(descriptor),
-            tcpClient.Client.GetSocketAddress());
+        var result = peerManager.new_inbound_connection(descriptor.SocketDescriptor, tcpClient.Client.GetSocketAddress());
         if (result.is_ok())
         {
             logger.LogInformation("New inbound connection accepted");
@@ -37,11 +36,11 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         PubKey pubKey, ConcurrentDictionary<string, LDKTcpDescriptor> descriptors)
     {
         var descriptor = new LDKTcpDescriptor(peerManager, tcpClient, logger, s => descriptors.TryRemove(s, out _));
-        var result = peerManager.new_outbound_connection(pubKey.ToBytes(), SocketDescriptor.new_impl(descriptor),
+        var result = peerManager.new_outbound_connection(pubKey.ToBytes(), descriptor.SocketDescriptor,
             tcpClient.Client.GetSocketAddress());
         if (result is Result_CVec_u8ZPeerHandleErrorZ.Result_CVec_u8ZPeerHandleErrorZ_OK ok)
         {
-            descriptor.send_data(ok.res, false);
+            descriptor.send_data(ok.res, true);
         }
 
         if (result.is_ok())
@@ -86,24 +85,16 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
 
     private async Task ReadEvents(CancellationToken cancellationToken)
     {
-        var first = true;
         var bufSz = 1024 * 16;
         var buffer = new byte[bufSz];
-        await _readSemaphore.WaitAsync(cancellationToken);
         while (_tcpClient.Connected && !_cts.IsCancellationRequested)
         {
-            if (first)
-            {
-                first = false;
-            }
-            else
-            {
-                await _readSemaphore.WaitAsync(cancellationToken);
-            }
             var read = await _stream.ReadAsync(buffer, cancellationToken);
             if (read == 0)
             {
-                continue;
+                _logger.LogWarning("Read 0 bytes, disconnecting");
+                disconnect_socket();
+                return;
             }
 
             var data = buffer[..read];
@@ -112,14 +103,13 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
                 res: true
             };
 
+            _logger.LogInformation($"Read {read} bytes of data from peer" );
             _peerManager.process_events();
             if (pause)
             {
                 _logger.LogInformation("Pausing as per instruction from read_event");
-                continue;
+                await _readSemaphore.WaitAsync(cancellationToken);
             }
-
-            Resume();
         }
     }
 
@@ -173,6 +163,7 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         _tcpClient.Dispose();
         _peerManager.socket_disconnected(SocketDescriptor);
 
+        _peerManager.process_events();
         _onDisconnect(Id);
     }
 

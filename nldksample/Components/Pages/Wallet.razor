@@ -15,6 +15,7 @@
 @inject Network Network
 @inject ExplorerClient ExplorerClient
 @inject LDKNodeManager NodeManager
+@implements IDisposable
 <PageTitle>Home</PageTitle>
 @if (WalletData is null)
 {
@@ -176,8 +177,22 @@ else
         SendDest = null;
         ConnectPeer = null;
         OpenChannelAmt = 0;
-
+        try
+        {
+            if (_peerManager != null) _peerManager.OnPeersChange -= PeerManagerOnOnPeersChange;
+        }
+        catch (Exception e)
+        {
+        }
         _ = Fetch();
+
+        try
+        {
+            if (_peerManager != null) _peerManager.OnPeersChange -= PeerManagerOnOnPeersChange;
+        }
+        catch (Exception e)
+        {
+        }
         return base.OnParametersSetAsync();
     }
 
@@ -191,17 +206,19 @@ else
             if (_node is not null)
             {
                 _peerManager = _node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
-                _peers = _peerManager.GetPeerNodeIds();
-                _peerManager.OnPeersChange += async (sender, args) =>
-                {
-                    _peers = args.PeerNodeIds;
-                    await InvokeAsync(StateHasChanged);
-                };
+                _peers = await _peerManager.GetPeerNodeIds();
+                _peerManager.OnPeersChange += PeerManagerOnOnPeersChange;
                 _channelManager = _node.ServiceProvider.GetRequiredService<ChannelManager>();
                 _channels = _channelManager.list_channels().ToList();
             }
             await InvokeAsync(StateHasChanged);
         });
+    }
+
+    private void PeerManagerOnOnPeersChange(object? sender, PeersChangedEventArgs e)
+    {
+        _peers = e.PeerNodeIds;
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async Task Derive()
@@ -259,4 +276,11 @@ else
          }
          return Task.CompletedTask;
     }
+
+    public void Dispose()
+    {
+        _peerManager.OnPeersChange -= PeerManagerOnOnPeersChange;
+
+    }
+
 }

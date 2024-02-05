@@ -19,6 +19,8 @@ public class LDKPeerHandler : IScopedHostedService
 
     readonly ConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
 
+    public LDKTcpDescriptor[] ActiveDescriptors => _descriptors.Values.ToArray();
+    
     public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger, ChannelManager channelManager)
     {
         _peerManager = peerManager;
@@ -31,10 +33,10 @@ public class LDKPeerHandler : IScopedHostedService
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ = ListenForInboundConnections(_cts.Token);
         _ = PeriodicTicker(_cts.Token, 1000, () =>  _peerManager.process_events());
-        _ = PeriodicTicker(_cts.Token, 10000, () => {
-            var prevPeerIds = GetPeerNodeIds();
+        _ = PeriodicTickerAsync(_cts.Token, 10000, async () => {
+            var prevPeerIds = await GetPeerNodeIds();
             _peerManager.timer_tick_occurred();
-            var currPeerIds = GetPeerNodeIds();
+            var currPeerIds = await GetPeerNodeIds();
             if (!prevPeerIds.SequenceEqual(currPeerIds))
             {
                 OnPeersChange.Invoke(this, new PeersChangedEventArgs(currPeerIds));
@@ -48,6 +50,14 @@ public class LDKPeerHandler : IScopedHostedService
         {
             await Task.Delay(ms, cancellationToken);
             action.Invoke();
+        }
+    }
+    private async Task PeriodicTickerAsync(CancellationToken cancellationToken, int ms, Func<Task> action)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            await Task.Delay(ms, cancellationToken);
+            await action.Invoke();
         }
     }
 
@@ -73,6 +83,7 @@ public class LDKPeerHandler : IScopedHostedService
             if (result is not null)
             {
                 _descriptors.TryAdd(result.Id, result);
+                _peerManager.process_events();
             }
         }
     }
@@ -98,20 +109,24 @@ public class LDKPeerHandler : IScopedHostedService
         if (result is not null)
         {
             _descriptors.TryAdd(result.Id, result);
+            _peerManager.process_events();
         }
 
         return result;
     }
 
-    public List<NodeInfo> GetPeerNodeIds()
+    public async Task<List<NodeInfo>> GetPeerNodeIds()
     {
-        return _peerManager.get_peer_node_ids().Select(zz =>
+        return await Task.Run(() => 
+        _peerManager.get_peer_node_ids().Select(zz =>
         {
             var pubKey = new PubKey(zz.get_a());
             var addr = zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x ? x.some.to_str() : null;
             EndPointParser.TryParse(addr, 9735, out var endpoint);
             return new NodeInfo(pubKey, endpoint.Host(), endpoint.Port().Value);
-        }).ToList();
+        }).ToList());
+        
+       
     }
 }
 

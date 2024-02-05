@@ -22,6 +22,11 @@ var builder = WebApplication.CreateBuilder(args);
 var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
 
 builder.Configuration.AddEnvironmentVariables("NLDK_");
+
+builder.Configuration.AddInMemoryCollection(new Dictionary<string, string>
+{
+    {"CONNECTIONSTRING", $"Data Source=wallet{Convert.ToHexString(RandomUtils.GetBytes(4))}.db"}
+});
 builder.Services
     .Configure<NLDKOptions>(builder.Configuration)
     .AddHostedService<MigratonHostedService>()
@@ -93,14 +98,40 @@ while (wallet1Node.NodeInfo is null || wallet2Node.NodeInfo is null)
 
 var wallet1PeerHandler = wallet1Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
 var wallet2PeerHandler = wallet2Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
+
+var wallet1PeerChangedTcs = new TaskCompletionSource();
+var wallet2PeerChangedTcs = new TaskCompletionSource();
+
+wallet1PeerHandler.OnPeersChange += (sender, args) => wallet1PeerChangedTcs.SetResult();
+wallet2PeerHandler.OnPeersChange += (sender, args) => wallet2PeerChangedTcs.SetResult();
 LDKTcpDescriptor? wallet1Peer = null;
 
-while (wallet1Peer is null)
+
+while (wallet1Peer is null )
 {
     Console.WriteLine("Attempting to connect node 1 to 2");
     wallet1Peer = await wallet1PeerHandler.ConnectAsync(wallet2Node.NodeInfo);
 }
-Console.WriteLine($"Connected, checking if Ldk agrees: {wallet1PeerHandler.GetPeerNodeIds().Any()}");
+
+while(wallet1PeerHandler.ActiveDescriptors.Length == 0)
+{
+    Console.WriteLine("Waiting until node 1 has a peer");
+    await Task.Delay(1000);
+}
+
+while(wallet2PeerHandler.ActiveDescriptors.Length == 0)
+{
+    Console.WriteLine("Waiting until node 2 has a peer");
+    await Task.Delay(1000);
+}
+
+while(!wallet1PeerChangedTcs.Task.IsCompleted || !wallet2PeerChangedTcs.Task.IsCompleted)
+{
+    Console.WriteLine("Waiting until both nodes have noticed the peer within LDK");
+    await Task.Delay(1000);
+}
+
+
 
 
 var wallet1ChannelManager= wallet1Node.ServiceProvider.GetRequiredService<ChannelManager>();
@@ -109,7 +140,7 @@ var userChannelId = new UInt128(RandomUtils.GetBytes(16));
 Console.WriteLine($"Attempting to open a channel from node 1 to 2 of 0.5BTC with a user channel id {Convert.ToHexString(userChannelId.getLEBytes())}");
 var channelResult = wallet1ChannelManager.create_channel(
     wallet2Node.NodeId.ToBytes(), 
-    Money.Coins(0.5m).Satoshi, 
+    Money.Coins(0.001m).Satoshi, 
     0,
     userChannelId, 
     Option_ThirtyTwoBytesZ.none(), 
