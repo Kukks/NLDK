@@ -269,6 +269,29 @@ public class WalletService
         }).RunAsync(cancellationToken);
     }
 
+    public async Task TrackCoins(string walletId, NBitcoin.Coin[] coins, CancellationToken cancellationToken = default)
+    {
+        await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
+        await context.Scripts.UpsertRange(coins.Select(coin => new Script()
+        {
+            Id = coin.ScriptPubKey.ToHex()
+        })).NoUpdate().RunAsync(cancellationToken);
+        await context.WalletScripts.UpsertRange(coins.Select(coin => new WalletScript()
+        {
+            ScriptId = coin.ScriptPubKey.ToHex(),
+            WalletId = walletId,
+            DerivationPath = null
+        })).NoUpdate().RunAsync(cancellationToken);
+        await context.Coins.UpsertRange(coins.Select(coin => new Coin()
+        {
+            FundingTransactionHash = coin.Outpoint.Hash.ToString(),
+            FundingTransactionOutputIndex = (int) coin.Outpoint.N,
+            ScriptId = coin.ScriptPubKey.ToHex(),
+            Value = coin.TxOut.Value.ToDecimal(MoneyUnit.BTC),
+        })).NoUpdate().RunAsync(cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+    
     public async Task TrackScript(string walletId, NBitcoin.Script script,
         CancellationToken cancellationToken = default)
     {

@@ -15,7 +15,7 @@ public interface ILDKEventHandler
         
         var result = this.GetType().GetInterfaces().FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ILDKEventHandler<>) && i.GetGenericArguments()[0] == eventType)
             ?.GetMethod(nameof(ILDKEventHandler<Event>.Handle))
-            ?.MakeGenericMethod(eventType)
+            // ?.MakeGenericMethod(eventType)
             ?.Invoke(this, new object[] {@event});
 
         if (result is Task task)

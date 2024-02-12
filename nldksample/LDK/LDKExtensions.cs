@@ -1,5 +1,6 @@
 ﻿using System.Net;
 using System.Net.Sockets;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using NBitcoin;
 using NBitcoin.RPC;
 using NBXplorer;
@@ -16,6 +17,11 @@ namespace nldksample.LDK;
 
 public static class LDKExtensions
 {
+    public static int? Get(this Option_u32Z option)
+    {
+        return option is Option_u32Z.Option_u32Z_Some some ? some.some : null;
+    }
+    
     public static string GetError(this APIError apiError)
     {
         return apiError switch
@@ -148,6 +154,7 @@ public static class LDKExtensions
         services.AddLDKEventHandler<LDKOpenChannelRequestEventHandler>();
         services.AddLDKEventHandler<LDKPaymentEventsHandler>();
         services.AddLDKEventHandler<LDKPendingHTLCsForwardableEventHandler>();
+        services.AddLDKEventHandler<LDKAnnouncementBroadcaster>();
         
         services.AddScoped<LDKEventHandler>();
         services.AddScoped<org.ldk.structs.EventHandler>(provider =>
@@ -247,10 +254,12 @@ public static class LDKExtensions
 
     public static IServiceCollection AddLDKEventHandler<T>(this IServiceCollection services) where T : class, ILDKEventHandler
     {
-        services.AddScoped<T>();
+        services.TryAddScoped<T>();
         services.AddScoped<ILDKEventHandler>(provider => provider.GetRequiredService<T>());
         return services;
     }
+    
+    
     
     public static org.ldk.enums.Network GetLdkNetwork(this Network network)
     {

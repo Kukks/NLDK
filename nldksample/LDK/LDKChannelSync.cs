@@ -122,9 +122,18 @@ public class LDKChannelSync : IScopedHostedService
 
         var tx = valueTuple.TransactionInformation.Transaction;
         var txHash = tx.GetHash();
+        byte[] headerBytes = null;
+        if (valueTuple.TransactionInformation.Confirmations > 0)
+        {
+            var header = _explorerClient.RPCClient.GetBlockHeaderAsync(valueTuple.TransactionInformation.BlockHash, CancellationToken.None).GetAwaiter().GetResult();
+            headerBytes = header.ToBytes();
+        }
         foreach (var confirm in _confirms)
         {
-            confirm.transaction_unconfirmed(txHash.ToBytes());
+            if(valueTuple.TransactionInformation.Confirmations == 0)
+                confirm.transaction_unconfirmed(txHash.ToBytes());
+            else
+                confirm.transactions_confirmed(headerBytes, new []{ TwoTuple_usizeTransactionZ.of(1, tx.ToBytes()),  }, (int) valueTuple.TransactionInformation.Height);
         }
     }
 

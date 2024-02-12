@@ -18,13 +18,15 @@ public class LDKBroadcaster : BroadcasterInterfaceInterface
 
     public void broadcast_transactions(byte[][] txs)
     {
+        List<Task> tasks = new();
         foreach (var tx in txs)
         {
             var loadedTx = Transaction.Load(tx, _explorerClient.Network.NBitcoinNetwork);
             if(_broadcastGateKeepers.Any(gk => gk.DontBroadcast(loadedTx)))
                 continue;
-            _ = Broadcast(loadedTx);
+            tasks.Add(Broadcast(loadedTx));
         }
+        Task.WhenAll(tasks).GetAwaiter().GetResult();
     }
 
     public async Task Broadcast(Transaction transaction, CancellationToken cancellationToken = default)

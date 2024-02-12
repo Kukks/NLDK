@@ -11,6 +11,7 @@
 @using NodeInfo = BTCPayServer.Lightning.NodeInfo
 @using TxOut = NBitcoin.TxOut
 @using UInt128 = org.ldk.util.UInt128
+@using System.Transactions
 @inject WalletService WalletService
 @inject Network Network
 @inject ExplorerClient ExplorerClient
@@ -68,27 +69,31 @@ else
                 {
                     <li>
                         @peer
-                        <ul>
-                            <li>peer channels</li>
-                            @foreach (var channel in _channels?.Where(details => new PubKey(details.get_counterparty().get_node_id()) == peer.NodeId ))
-                            {
-                                var id = channel.get_channel_id();
-                                <li>
-                                    @Convert.ToHexString(id)
-                                    <br/>
-                                    usable: @channel.get_is_usable()
-                                    <button @onclick="() => CloseChannel(channel, false)">Close </button>
-                                    <button @onclick="() => CloseChannel(channel, true)">Force Close </button>
-                                </li>
+                        @if (_channels is not null)
+                        {
 
-                            }
-                            <li>Open channel
-                                <input type="number" @bind="OpenChannelAmt" max="@Balance"/>
-                                <button @onclick="() => OpenChannel(peer.NodeId, OpenChannelAmt)">
-                                    Open channel
-                                </button>
-                            </li>
-                        </ul>
+                            <ul>
+                                <li>peer channels</li>
+                                @foreach (var channel in _channels?.Where(details => new PubKey(details.get_counterparty().get_node_id()) == peer.NodeId))
+                                {
+                                    var id = channel.get_channel_id();
+                                    <li>
+                                        @Convert.ToHexString(id)
+                                        <br/>
+                                        usable: @channel.get_is_usable()
+                                        <button @onclick="() => CloseChannel(channel, false)">Close </button>
+                                        <button @onclick="() => CloseChannel(channel, true)">Force Close </button>
+                                    </li>
+
+                                }
+                                <li>Open channel
+                                    <input type="number" @bind="OpenChannelAmt" max="@Balance"/>
+                                    <button @onclick="() => OpenChannel(peer.NodeId, OpenChannelAmt)">
+                                        Open channel
+                                    </button>
+                                </li>
+                            </ul>
+                        }
                     </li>
                 }
             </ul>
@@ -141,6 +146,7 @@ else
 
     public async Task OpenChannel(PubKey nodeId, decimal amt)
     {
+        Task.Run(() => { 
         var userConfig = _node.ServiceProvider.GetRequiredService<UserConfig>();
         _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogInformation($"Attempt to open channel of {amt} to {nodeId}");
 
@@ -153,6 +159,7 @@ else
         {
             _node.ServiceProvider.GetRequiredService<LDKWalletLogger>().LogInformation($"Channel created with id {Convert.ToHexString(ok.res)}");
         }
+        });
     }
 
     private IEnumerable<Coin>? UnspentCoins => WalletData?.Scripts.Where(walletScript => walletScript.DerivationPath is not null).SelectMany(script => script.Script.Coins).Where(coin => coin.SpendingTransactionHash is null);

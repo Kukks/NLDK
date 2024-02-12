@@ -4,7 +4,7 @@ using org.ldk.structs;
 
 namespace nldksample.LDK;
 
-public class LDKAnnouncementBroadcaster: IScopedHostedService
+public class LDKAnnouncementBroadcaster: IScopedHostedService, ILDKEventHandler<Event.Event_ChannelReady>
 {
     private readonly LDKPeerHandler _ldkPeerHandler;
     private readonly PeerManager _peerManager;
@@ -27,6 +27,8 @@ public class LDKAnnouncementBroadcaster: IScopedHostedService
         _ = RegularlyBroadcastAnnouncement(_cts.Token);
     }
 
+    private TaskCompletionSource? _tcs;
+    
     private async Task RegularlyBroadcastAnnouncement(CancellationToken cancellationToken)
     {
         while(cancellationToken.IsCancellationRequested == false)
@@ -38,12 +40,18 @@ public class LDKAnnouncementBroadcaster: IScopedHostedService
                 var alias = settings?.Alias ?? "NLDK";
                 _peerManager.broadcast_node_announcement(new byte[]{0,0,0}, Encoding.UTF8.GetBytes(alias), endpoint is null? Array.Empty<SocketAddress>(): new []{endpoint});
             }
-            await Task.Delay(TimeSpan.FromMinutes(10), cancellationToken);
+            _tcs = new TaskCompletionSource();
+            await Task.WhenAny(_tcs.Task, Task.Delay(TimeSpan.FromMinutes(10), cancellationToken));
         }
     }
 
     public async Task StopAsync(CancellationToken cancellationToken)
     {
         await (_cts?.CancelAsync() ?? Task.CompletedTask);
+    }
+
+    public async Task Handle(Event.Event_ChannelReady @event)
+    {
+        _tcs?.TrySetResult();
     }
 }

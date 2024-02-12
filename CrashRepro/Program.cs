@@ -13,6 +13,7 @@ using NBXplorer.Models;
 using NLDK;
 using nldksample.LDK;
 using org.ldk.structs;
+using NodeInfo = BTCPayServer.Lightning.NodeInfo;
 using UInt128 = org.ldk.util.UInt128;
 
 
@@ -99,11 +100,11 @@ while (wallet1Node.NodeInfo is null || wallet2Node.NodeInfo is null)
 var wallet1PeerHandler = wallet1Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
 var wallet2PeerHandler = wallet2Node.ServiceProvider.GetRequiredService<LDKPeerHandler>();
 
-var wallet1PeerChangedTcs = new TaskCompletionSource();
-var wallet2PeerChangedTcs = new TaskCompletionSource();
+var wallet1PeerChangedTcs = new TaskCompletionSource<List<NodeInfo>>();
+var wallet2PeerChangedTcs = new TaskCompletionSource<List<NodeInfo>>();
 
-wallet1PeerHandler.OnPeersChange += (sender, args) => wallet1PeerChangedTcs.SetResult();
-wallet2PeerHandler.OnPeersChange += (sender, args) => wallet2PeerChangedTcs.SetResult();
+wallet1PeerHandler.OnPeersChange += (sender, args) => wallet1PeerChangedTcs.SetResult(args.PeerNodeIds);
+wallet2PeerHandler.OnPeersChange += (sender, args) => wallet2PeerChangedTcs.SetResult(args.PeerNodeIds);
 LDKTcpDescriptor? wallet1Peer = null;
 
 
@@ -129,32 +130,57 @@ while(!wallet1PeerChangedTcs.Task.IsCompleted || !wallet2PeerChangedTcs.Task.IsC
 {
     Console.WriteLine("Waiting until both nodes have noticed the peer within LDK");
     await Task.Delay(1000);
+    await wallet1PeerHandler.GetPeerNodeIds();
+    await wallet2PeerHandler.GetPeerNodeIds();
 }
 
 
 
 
 var wallet1ChannelManager= wallet1Node.ServiceProvider.GetRequiredService<ChannelManager>();
+var wallet2ChannelManager= wallet2Node.ServiceProvider.GetRequiredService<ChannelManager>();
 var wallet1UserConfig= wallet1Node.ServiceProvider.GetRequiredService<UserConfig>();
 var userChannelId = new UInt128(RandomUtils.GetBytes(16));
 Console.WriteLine($"Attempting to open a channel from node 1 to 2 of 0.5BTC with a user channel id {Convert.ToHexString(userChannelId.getLEBytes())}");
 var channelResult = wallet1ChannelManager.create_channel(
     wallet2Node.NodeId.ToBytes(), 
-    Money.Coins(0.001m).Satoshi, 
+    Money.Coins(0.01m).Satoshi, 
     0,
     userChannelId, 
     Option_ThirtyTwoBytesZ.none(), 
     wallet1UserConfig);
 
-while(wallet1ChannelManager.list_channels().Length == 0)
+while(wallet1ChannelManager.list_channels().Length == 0 || wallet2ChannelManager.list_channels().Length == 0)
 {
     Console.WriteLine("Waiting until ldk notices channel");
     await Task.Delay(100);
 }
 
 var channels = wallet1ChannelManager.list_channels();
+var channels2 = wallet2ChannelManager.list_channels();
+var confs = 0;
+while (!channels[0].get_is_channel_ready() && !channels2[0].get_is_channel_ready())
+{
+    await Task.Delay(1000);
+    
+    channels = wallet1ChannelManager.list_channels();
+    channels2 = wallet2ChannelManager.list_channels();
+    
+    var channel = channels[0];
+    
+    await explorerClient.RPCClient.GenerateAsync(1);
+    confs += 1;
+    Console.WriteLine($"Waiting until channel is ready. " +
+                      $"node1 ready={channel.get_is_channel_ready()}, node2={channels2[0].get_is_channel_ready()} " + Environment.NewLine +
+                      $"node1 usable={channel.get_is_usable()}, node2={channels2[0].get_is_usable()}"+ Environment.NewLine +
+                      $"node1 confs={channel.get_confirmations().Get()}/{channel.get_confirmations_required().Get()}, node2={channels2[0].get_confirmations().Get()}/{channels2[0].get_confirmations_required().Get()}");
 
-var channel = channels[0];
+}
 
+
+while (true)
+{
+    await Task.Delay(1000);
+}
 
 

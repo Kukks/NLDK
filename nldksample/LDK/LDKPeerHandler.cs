@@ -22,7 +22,7 @@ public class LDKPeerHandler : IScopedHostedService
     readonly ObservableConcurrentDictionary<string, LDKTcpDescriptor> _descriptors = new();
 
     public LDKTcpDescriptor[] ActiveDescriptors => _descriptors.Values.ToArray();
-    
+
     public LDKPeerHandler(PeerManager peerManager, LDKWalletLoggerFactory logger, ChannelManager channelManager)
     {
         _peerManager = peerManager;
@@ -34,7 +34,7 @@ public class LDKPeerHandler : IScopedHostedService
     {
         _cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         _ = ListenForInboundConnections(_cts.Token);
-        _ = PeriodicTicker(_cts.Token, 1000, () =>  _peerManager.process_events());
+        _ = PeriodicTicker(_cts.Token, 1000, () => _peerManager.process_events());
         _descriptors.CollectionChanged += DescriptorsOnCollectionChanged;
     }
 
@@ -46,8 +46,8 @@ public class LDKPeerHandler : IScopedHostedService
             {
                 await Task.Delay(2000);
             }
-            var nodes = await GetPeerNodeIds();
-            OnPeersChange?.Invoke(this, new PeersChangedEventArgs(nodes));
+
+            await GetPeerNodeIds();
         });
     }
 
@@ -59,6 +59,7 @@ public class LDKPeerHandler : IScopedHostedService
             action.Invoke();
         }
     }
+
     private async Task PeriodicTickerAsync(CancellationToken cancellationToken, int ms, Func<Task> action)
     {
         while (!cancellationToken.IsCancellationRequested)
@@ -75,7 +76,7 @@ public class LDKPeerHandler : IScopedHostedService
 
         _logger.LogInformation("Stopping, disconnecting all peers");
         _peerManager.disconnect_all_peers();
-        
+
         _descriptors.CollectionChanged -= DescriptorsOnCollectionChanged;
     }
 
@@ -84,7 +85,7 @@ public class LDKPeerHandler : IScopedHostedService
         using var listener = new TcpListener(new IPEndPoint(IPAddress.Any, 0));
         listener.Start();
         var ip = listener.LocalEndpoint;
-        Endpoint = new IPEndPoint(IPAddress.Loopback, (int)ip.Port());
+        Endpoint = new IPEndPoint(IPAddress.Loopback, (int) ip.Port());
         while (!cancellationToken.IsCancellationRequested)
         {
             var result = LDKTcpDescriptor.Inbound(_peerManager, await listener.AcceptTcpClientAsync(cancellationToken),
@@ -124,18 +125,55 @@ public class LDKPeerHandler : IScopedHostedService
         return result;
     }
 
+    private SemaphoreSlim peerFetchLock = new(1, 1);
+    private HashSet<string> _peerNodeIds = new();
+
     public async Task<List<NodeInfo>> GetPeerNodeIds()
     {
-        return await Task.Run(() => 
-        _peerManager.get_peer_node_ids().Select(zz =>
+        // update the peer node ids in _peerrNodeIds with the latest from the peer manager without recrerating the observable
+        await peerFetchLock.WaitAsync();
+        try
         {
-            var pubKey = new PubKey(zz.get_a());
-            var addr = zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x ? x.some.to_str() : null;
-            EndPointParser.TryParse(addr, 9735, out var endpoint);
-            return new NodeInfo(pubKey, endpoint.Host(), endpoint.Port().Value);
-        }).ToList());
-        
-       
+            return await Task.Run(() =>
+            {
+                var peerNodeIds = _peerManager.get_peer_node_ids().Select(zz =>
+                {
+                    var pubKey = new PubKey(zz.get_a());
+                    var addr = zz.get_b() is Option_SocketAddressZ.Option_SocketAddressZ_Some x
+                        ? x.some.to_str()
+                        : null;
+                    EndPointParser.TryParse(addr, 9735, out var endpoint);
+                    return new NodeInfo(pubKey, endpoint.Host(), endpoint.Port().Value);
+                }).ToList();
+
+                var updated = false;
+                foreach (var peerNodeId in peerNodeIds)
+                {
+                    if (_peerNodeIds.Add(peerNodeId.NodeId.ToString()))
+                    {
+                        updated = true;
+                    }
+                }
+
+                if (_peerNodeIds.RemoveWhere(x => peerNodeIds.All(y => y.NodeId.ToString() != x)) > 0)
+                {
+                    updated = true;
+                }
+
+                if (updated)
+                {
+                    OnPeersChange?.Invoke(this, new PeersChangedEventArgs(peerNodeIds));
+                    _peerNodeIds = [..peerNodeIds.Select(x => x.NodeId.ToString())];
+                    _logger.LogInformation("Peers changed");
+                }
+
+                return peerNodeIds;
+            });
+        }
+        finally
+        {
+            peerFetchLock.Release();
+        }
     }
 }
 
