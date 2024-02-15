@@ -1,5 +1,6 @@
 ﻿using AsyncKeyedLock;
 using NBitcoin;
+using NBXplorer;
 using NBXplorer.Models;
 using NLDK;
 using org.ldk.structs;
@@ -10,11 +11,14 @@ namespace nldksample.LDK;
 public class CurrentWalletService
 {
     private readonly WalletService _walletService;
+    private readonly NBXplorerNetwork _network;
+
     private Wallet? _wallet;
     // private Dictionary<string, byte[]> _data;
-    public CurrentWalletService(WalletService walletService)
+    public CurrentWalletService(WalletService walletService, NBXplorerNetwork network)
     {
         _walletService = walletService;
+        _network = network;
     }
 
     public void SetWallet(Wallet wallet)
@@ -25,6 +29,14 @@ public class CurrentWalletService
         }
         _wallet = wallet;
         Seed = new Mnemonic(_wallet.Mnemonic).DeriveExtKey().Derive(new KeyPath(_wallet.DerivationPath.Replace("/*", ""))).PrivateKey.ToBytes();
+
+        foreach (var alias in wallet.AliasWalletName)
+        {
+            if (!TrackedSource.TryParse(alias, out var ts, _network) || ts is not GroupTrackedSource gts) continue;
+            GroupTrackedSource = gts;
+            break;
+        }
+
         // _walletService.GetArbitraryData(_wallet.Id).ContinueWith(task => 
         // {
         //     _data = task.Result.ToDictionary(kv => kv.Key.Replace(_wallet.Id, ""), kv => kv.Value);
@@ -34,6 +46,7 @@ public class CurrentWalletService
         WalletSelected.SetResult();
 
     }
+    
 
     public byte[] Seed { get; private set; }
 
@@ -58,6 +71,8 @@ public class CurrentWalletService
 
     private ChannelMonitor[]? _channels = null;
     private readonly AsyncNonKeyedLocker _ss = new(1);
+    public GroupTrackedSource GroupTrackedSource { get; private set; } 
+
     public ChannelMonitor[] GetInitialChannelMonitors(EntropySource entropySource, SignerProvider signerProvider)
     {
         using (_ss.Lock())

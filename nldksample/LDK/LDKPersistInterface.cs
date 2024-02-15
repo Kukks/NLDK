@@ -16,20 +16,19 @@ public class LDKPersistInterface : PersistInterface
     private readonly WalletService _walletService;
     private readonly ExplorerClient _explorerClient;
     private readonly Network _network;
+    private readonly GroupTrackedSource _groupTrackedSource;
     private readonly string _walletId;
-    private readonly GroupTrackedSource _ts;
 
     public LDKPersistInterface(CurrentWalletService currentWalletService, 
         WalletService walletService, 
         ExplorerClient explorerClient,
-        Network network)
+        Network network, GroupTrackedSource groupTrackedSource)
     {
         _walletService = walletService;
         _explorerClient = explorerClient;
         _network = network;
+        _groupTrackedSource = groupTrackedSource;
         _walletId = currentWalletService.CurrentWallet;
-        
-        _ts = new GroupTrackedSource(currentWalletService.CurrentWallet);
     }
 
     public ChannelMonitorUpdateStatus persist_new_channel(OutPoint channel_id, ChannelMonitor data,
@@ -48,7 +47,7 @@ public class LDKPersistInterface : PersistInterface
         try
         {
             var scripts = coins.Select(coin => coin.ScriptPubKey.GetDestinationAddress(_network).ToString()).ToArray();
-            _explorerClient.AddGroupAddressAsync("BTC",_ts.GroupId, scripts).ConfigureAwait(false).GetAwaiter().GetResult();
+            _explorerClient.AddGroupAddressAsync("BTC",_groupTrackedSource.GroupId, scripts).ConfigureAwait(false).GetAwaiter().GetResult();
         }
         catch (Exception e)
         {

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NBitcoin;
 using NBitcoin.RPC;
 using NBXplorer;
+using NBXplorer.Models;
 using Newtonsoft.Json;
 using NLDK;
 using nldksample.LSP.Flow;
@@ -70,8 +71,10 @@ public static class LDKExtensions
     }
 
     public static IServiceCollection AddLDK(this IServiceCollection services)
-    {
+    { 
         services.AddScoped<CurrentWalletService>();
+        services.AddScoped<GroupTrackedSource>(provider =>provider.GetRequiredService<CurrentWalletService>().GroupTrackedSource);
+        
         services.AddScoped<KeysManager>(provider => KeysManager.of(provider.GetRequiredService<CurrentWalletService>().Seed, DateTimeOffset.Now.ToUnixTimeSeconds(),
             RandomUtils.GetInt32()));
         services.AddScoped(provider => provider.GetRequiredService<KeysManager>().as_NodeSigner());

@@ -40,7 +40,8 @@ builder.Services
     .AddSingleton<WalletService>()
     .AddLDK()
     .AddSingleton<NBXListener>()
-    .AddSingleton<Network>(provider => provider.GetRequiredService<ExplorerClient>().Network.NBitcoinNetwork)
+    .AddSingleton<Network>(provider => provider.GetRequiredService<NBXplorerNetwork>().NBitcoinNetwork)
+    .AddSingleton<NBXplorerNetwork>(provider => provider.GetRequiredService<ExplorerClient>().Network)
     .AddSingleton<ExplorerClient>(sp => 
         new ExplorerClient(nbxNetworkProvider.GetFromCryptoCode("BTC"), new Uri(sp.GetRequiredService<IOptions<NLDKOptions>>().Value.NBXplorerConnection)))
     .AddDbContextFactory<WalletContext>((provider, optionsBuilder) => optionsBuilder.UseSqlite(provider.GetRequiredService<IOptions<NLDKOptions>>().Value.ConnectionString));
@@ -58,9 +59,9 @@ async Task<string> CreateWallet(IServiceProvider serviceProvider)
     var genWallet = await explorerClient.GenerateWalletAsync();
     var hash = await explorerClient.RPCClient.GetBestBlockHashAsync();
     var ts = new DerivationSchemeTrackedSource(genWallet.DerivationScheme);
-    var idx = genWallet.GetMnemonic().DeriveExtKey().GetPublicKey().GetHDFingerPrint().ToString();
-    var wts = new GroupTrackedSource(idx);
-    await explorerClient.TrackAsync(wts);
+    var idx = await explorerClient.CreateGroupAsync();// genWallet.GetMnemonic().DeriveExtKey().GetPublicKey().GetHDFingerPrint().ToString();
+    var wts = new GroupTrackedSource(idx.GroupId);
+    
     await explorerClient.AddGroupChildrenAsync(wts.GroupId, new[]
     {
         new GroupChild()
@@ -141,7 +142,7 @@ var wallet1ChannelManager= wallet1Node.ServiceProvider.GetRequiredService<Channe
 var wallet2ChannelManager= wallet2Node.ServiceProvider.GetRequiredService<ChannelManager>();
 var wallet1UserConfig= wallet1Node.ServiceProvider.GetRequiredService<UserConfig>();
 var userChannelId = new UInt128(RandomUtils.GetBytes(16));
-Console.WriteLine($"Attempting to open a channel from node 1 to 2 of 0.5BTC with a user channel id {Convert.ToHexString(userChannelId.getLEBytes())}");
+Console.WriteLine($"Attempting to open a channel from node 1 to 2 of 0.01BTC with a user channel id {Convert.ToHexString(userChannelId.getLEBytes())}");
 var channelResult = wallet1ChannelManager.create_channel(
     wallet2Node.NodeId.ToBytes(), 
     Money.Coins(0.01m).Satoshi, 

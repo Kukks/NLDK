@@ -10,20 +10,18 @@ namespace nldksample.LDK;
 public class LDKFilter : FilterInterface
 {
     private readonly string _walletId;
-    private readonly CurrentWalletService _currentWalletService;
     private readonly WalletService _walletService;
     private readonly ExplorerClient _explorerClient;
     private readonly Network _network;
-    private readonly GroupTrackedSource _ts;
+    private readonly GroupTrackedSource _groupTrackedSource;
 
-    public LDKFilter(CurrentWalletService currentWalletService, WalletService walletService, ExplorerClient explorerClient, Network network)
+    public LDKFilter(CurrentWalletService currentWalletService, WalletService walletService, ExplorerClient explorerClient, Network network, GroupTrackedSource groupTrackedSource)
     {
         _walletId = currentWalletService.CurrentWallet;
-        _currentWalletService = currentWalletService;
         _walletService = walletService;
         _explorerClient = explorerClient;
         _network = network;
-        _ts = new GroupTrackedSource(currentWalletService.CurrentWallet);
+        _groupTrackedSource = groupTrackedSource;
     }
 
     public void register_tx(byte[] txid, byte[] script_pubkey)
@@ -41,7 +39,7 @@ public class LDKFilter : FilterInterface
     private async Task Track(Script script)
     {
         var address = script.GetDestinationAddress(_network);
-        await _explorerClient.AddGroupAddressAsync("BTC",_ts.GroupId, new []{address.ToString()});
+        await _explorerClient.AddGroupAddressAsync("BTC",_groupTrackedSource.GroupId, new []{address.ToString()});
         await _walletService.TrackScript(_walletId, script);
     }
 }

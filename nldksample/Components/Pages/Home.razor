@@ -20,9 +20,9 @@
         var genWallet = await ExplorerClient.GenerateWalletAsync();
         var hash = await ExplorerClient.RPCClient.GetBestBlockHashAsync();
         var ts = new DerivationSchemeTrackedSource(genWallet.DerivationScheme);
-        var idx = genWallet.GetMnemonic().DeriveExtKey().GetPublicKey().GetHDFingerPrint().ToString();
+        var idx = (await ExplorerClient.CreateGroupAsync()).GroupId;//genWallet.GetMnemonic().DeriveExtKey().GetPublicKey().GetHDFingerPrint().ToString();
         var wts = new GroupTrackedSource(idx);
-        await ExplorerClient.TrackAsync(wts);
+        
         await ExplorerClient.AddGroupChildrenAsync(idx, new GroupChild[]
         {
             new GroupChild()

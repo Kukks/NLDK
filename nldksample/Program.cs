@@ -31,6 +31,7 @@ builder.Services
     .AddLDK()
     .AddSingleton<NBXListener>()
     .AddSingleton<Network>(provider => provider.GetRequiredService<ExplorerClient>().Network.NBitcoinNetwork)
+    .AddSingleton<NBXplorerNetwork>(provider => provider.GetRequiredService<ExplorerClient>().Network)
     .AddSingleton<ExplorerClient>(sp => 
         new ExplorerClient(nbxNetworkProvider.GetFromCryptoCode("BTC"), new Uri(sp.GetRequiredService<IOptions<NLDKOptions>>().Value.NBXplorerConnection)))
     .AddDbContextFactory<WalletContext>((provider, optionsBuilder) => optionsBuilder.UseSqlite(provider.GetRequiredService<IOptions<NLDKOptions>>().Value.ConnectionString));

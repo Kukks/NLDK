@@ -41,10 +41,22 @@ public class NBXListener : IHostedService
                     var factory = new DerivationStrategyFactory(_network);
                     foreach (var wallet in ws)
                     {
-                        var wts = new GroupTrackedSource(wallet.Id);
+                        // var wts = new GroupTrackedSource(wallet.Id);
                         var child = new List<TrackedSource>();
+                        GroupTrackedSource? wts = null;
                         foreach (var alias in wallet.AliasWalletName)
                         {
+                            if (TrackedSource.TryParse(alias, out var ts, _explorerClient.Network) && ts is GroupTrackedSource gts && wts is null)
+                            {
+                                wts = gts;
+                                continue;
+                            }
+                            if (ts is not null)
+                            {
+                                child.Add(ts);
+                                continue;
+                            }
+
                             try
                             {
                                var ds =  factory.Parse(alias);
@@ -60,7 +72,7 @@ public class NBXListener : IHostedService
                             }
                         }
 
-                        await _explorerClient.AddGroupChildrenAsync(wts.GroupId, child.Select(source => new GroupChild()
+                        await _explorerClient.AddGroupChildrenAsync(wts!.GroupId, child.Select(source => new GroupChild()
                         {
                             TrackedSource = source.ToString(),
                             CryptoCode = "BTC"
