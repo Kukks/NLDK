@@ -161,7 +161,6 @@ public class LDKTcpDescriptor : SocketDescriptorInterface
         _stream.Dispose();
         _tcpClient.Dispose();
         _peerManager.socket_disconnected(SocketDescriptor);
-
         _peerManager.process_events();
         _onDisconnect(Id);
     }

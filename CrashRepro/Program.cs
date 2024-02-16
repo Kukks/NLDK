@@ -1,5 +1,6 @@
 ﻿
 using AsyncKeyedLock;
+using BTCPayServer.Lightning;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,9 @@ using NBXplorer;
 using NBXplorer.Models;
 using NLDK;
 using nldksample.LDK;
+using org.ldk.enums;
 using org.ldk.structs;
+using Network = NBitcoin.Network;
 using NodeInfo = BTCPayServer.Lightning.NodeInfo;
 using UInt128 = org.ldk.util.UInt128;
 
@@ -178,10 +181,19 @@ while (!channels[0].get_is_channel_ready() && !channels2[0].get_is_channel_ready
 
 }
 
+var node2PaymentManager = wallet2Node.ServiceProvider.GetRequiredService<PaymentsManager>();
+var node1PaymentManager = wallet1Node.ServiceProvider.GetRequiredService<PaymentsManager>();
+
+var node2PaymentRequest = await node2PaymentManager.RequestPayment(LightMoney.Satoshis(1000), TimeSpan.FromMinutes(10), "test payment");
+await  node1PaymentManager.PayInvoice(node2PaymentRequest);
+
+
+
 
 while (true)
 {
     await Task.Delay(1000);
 }
+
 
 

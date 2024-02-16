@@ -3,6 +3,8 @@ using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
+namespace nldksample;
+
 /// <summary>
 /// Represents a thread-safe collection of key/value pairs that can be accessed by multiple threads concurrently and provides
 /// notifications when items get added, removed, or when the whole list is refreshed.

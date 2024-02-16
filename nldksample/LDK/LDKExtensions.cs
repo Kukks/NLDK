@@ -8,6 +8,7 @@ using NBXplorer.Models;
 using Newtonsoft.Json;
 using NLDK;
 using nldksample.LSP.Flow;
+using org.ldk.enums;
 using org.ldk.structs;
 using Network = NBitcoin.Network;
 using Script = NBitcoin.Script;
@@ -189,6 +190,7 @@ public static class LDKExtensions
         services.AddScoped<LDKPeerHandler>();
         services.AddScoped<LDKBackgroundProcessor>();
         services.AddScoped<LDKAnnouncementBroadcaster>();
+        services.AddScoped<PaymentsManager>();
         services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKChannelSync>());
         services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKBackgroundProcessor>());
         services.AddScoped<IScopedHostedService>(provider => provider.GetRequiredService<LDKPeerHandler>());

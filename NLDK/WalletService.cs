@@ -272,16 +272,8 @@ public class WalletService
     public async Task TrackCoins(string walletId, NBitcoin.Coin[] coins, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        await context.Scripts.UpsertRange(coins.Select(coin => new Script()
-        {
-            Id = coin.ScriptPubKey.ToHex()
-        })).NoUpdate().RunAsync(cancellationToken);
-        await context.WalletScripts.UpsertRange(coins.Select(coin => new WalletScript()
-        {
-            ScriptId = coin.ScriptPubKey.ToHex(),
-            WalletId = walletId,
-            DerivationPath = null
-        })).NoUpdate().RunAsync(cancellationToken);
+        
+        await AddScripts(walletId, coins.Select(coin => coin.ScriptPubKey), context, cancellationToken);
         await context.Coins.UpsertRange(coins.Select(coin => new Coin()
         {
             FundingTransactionHash = coin.Outpoint.Hash.ToString(),
@@ -296,19 +288,23 @@ public class WalletService
         CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-
-        await context.Scripts.Upsert(new Script()
+        await AddScripts(walletId, new[] {script}, context, cancellationToken);
+        await context.SaveChangesAsync(cancellationToken);
+    }
+    
+    
+    private async Task AddScripts(string walletId, IEnumerable<NBitcoin.Script> scripts, WalletContext context, CancellationToken cancellationToken)
+    {
+        await context.Scripts.UpsertRange(scripts.Select(script => new Script()
         {
             Id = script.ToHex(),
-        }).NoUpdate().RunAsync(cancellationToken);
-        await context.WalletScripts.Upsert(new WalletScript()
+        })).NoUpdate().RunAsync(cancellationToken);
+        context.WalletScripts.UpsertRange(scripts.Select(script => new WalletScript()
         {
             ScriptId = script.ToHex(),
             WalletId = walletId,
             DerivationPath = null
-        }).NoUpdate().RunAsync(cancellationToken);
-
-        await context.SaveChangesAsync(cancellationToken);
+        })).NoUpdate().RunAsync(cancellationToken);
     }
 
     public async Task AddSpendableToCoin(string walletId, (OutPoint outpoint, TxOut txOut, byte[] write)[] set,
@@ -421,11 +417,11 @@ public class WalletService
         return (tx, txBuilder.FindSpentCoins(tx), changeScript);
     }
 
-    public async Task PaymentUpdate(string walletId, string paymentHssh, bool inbound, string paymentId, bool failure,
+    public async Task PaymentUpdate(string walletId, string paymentHash, bool inbound, string paymentId, bool failure,
         string? preimage, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var payment = await context.LightningPayments.FindAsync(walletId, paymentHssh, inbound, paymentId);
+        var payment = await context.LightningPayments.FindAsync(walletId, paymentHash, inbound, paymentId);
         if (payment != null)
         {
             if (failure && payment.Status == LightningPaymentStatus.Complete)
