@@ -20,7 +20,7 @@ public class LightningPayment: BaseEntity
     public static void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<LightningPayment>()
-            .HasKey(w => new {w.WalletId, w.PaymentHash, w.Inbound, w.PaymentId});
+            .HasKey(w => new {w.WalletId, w.PaymentHash, w.Inbound});
         modelBuilder.Entity<LightningPayment>()
             .HasOne(w => w.Wallet)
             .WithMany(wallet => wallet.LightningPayments)

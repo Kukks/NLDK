@@ -421,7 +421,12 @@ public class WalletService
         string? preimage, CancellationToken cancellationToken = default)
     {
         await using var context = await _dbContextFactory.CreateDbContextAsync(cancellationToken);
-        var payment = await context.LightningPayments.FindAsync(walletId, paymentHash, inbound, paymentId);
+        var payment = await context.LightningPayments.SingleOrDefaultAsync(lightningPayment => 
+            lightningPayment.WalletId == walletId && 
+            lightningPayment.PaymentHash == paymentHash && 
+            lightningPayment.Inbound == inbound && 
+            lightningPayment.PaymentId == paymentId,
+            cancellationToken);
         if (payment != null)
         {
             if (failure && payment.Status == LightningPaymentStatus.Complete)
@@ -433,9 +438,9 @@ public class WalletService
                 payment.Status = failure ? LightningPaymentStatus.Failed : LightningPaymentStatus.Complete;
                 payment.Preimage ??= preimage;
             }
+            await context.SaveChangesAsync(cancellationToken);
         }
 
-        await context.SaveChangesAsync(cancellationToken);
     }
 
     public async Task<NBitcoin.Transaction> SignTransaction(string walletId, NBitcoin.Transaction tx1,

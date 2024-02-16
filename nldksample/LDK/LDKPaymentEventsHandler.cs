@@ -51,6 +51,7 @@ public class LDKPaymentEventsHandler :
 
     public async Task Handle(Event.Event_PaymentFailed @eventPaymentFailed)
     {
+        
         await _walletService.PaymentUpdate(_walletId, Convert.ToHexString(eventPaymentFailed.payment_hash), false,
             Convert.ToHexString(eventPaymentFailed.payment_id), true, null);
     }

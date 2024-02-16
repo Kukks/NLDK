@@ -50,7 +50,7 @@ public class PaymentsManager
             PaymentHash = paymentRequest.PaymentHash.ToString(),
             Secret = paymentRequest.PaymentSecret.ToString(),
             Status = LightningPaymentStatus.Pending,
-            Timestamp = DateTimeOffset.UtcNow,
+            Timestamp = DateTimeOffset.UtcNow
         });
         return paymentRequest;
     }
@@ -78,13 +78,13 @@ public class PaymentsManager
         await _walletService.Payment(new LightningPayment()
         {
             WalletId = _currentWalletService.CurrentWallet,
-            Inbound = true,
+            Inbound = false,
             Value = amt,
             PaymentHash = paymentRequest.PaymentHash.ToString(),
             Secret = paymentRequest.PaymentSecret.ToString(),
             Status = LightningPaymentStatus.Pending,
             Timestamp = DateTimeOffset.UtcNow,
-            PaymentId = Convert.ToHexString(RandomUtils.GetBytes(32))
+            PaymentId = Convert.ToHexString(id)
         });
         
         var result = _channelManager.send_payment(invoice.payment_hash(),

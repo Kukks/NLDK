@@ -26,7 +26,7 @@ var builder = WebApplication.CreateBuilder(args);
 var nbxNetworkProvider = new NBXplorerNetworkProvider(ChainName.Regtest);
 
 builder.Configuration.AddEnvironmentVariables("NLDK_");
-
+builder.Configuration.AddJsonFile("appsettings.Development.json", false);
 builder.Configuration.AddInMemoryCollection(new Dictionary<string, string>
 {
     {"CONNECTIONSTRING", $"Data Source=wallet{Convert.ToHexString(RandomUtils.GetBytes(4))}.db"}

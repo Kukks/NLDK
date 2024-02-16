@@ -28,6 +28,7 @@ public class NBXListener : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
+        
         _ = Task.Run(async () =>
         {
             while (!cancellationToken.IsCancellationRequested)
@@ -95,6 +96,7 @@ public class NBXListener : IHostedService
             }
         }, cancellationToken);
     }
+    
 
     private async Task Loop(WebsocketNotificationSession session, CancellationToken cancellationToken)
     {
