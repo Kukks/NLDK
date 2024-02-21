@@ -1,6 +1,7 @@
 ﻿using AsyncKeyedLock;
 using BTCPayServer.Lightning;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using NBitcoin;
 using NBXplorer.Models;
 using Newtonsoft.Json;
@@ -12,15 +13,18 @@ public class WalletService
     private readonly IDbContextFactory<WalletContext> _dbContextFactory;
     private readonly AsyncKeyedLocker<string> _asyncKeyedLocker;
     private readonly Network _network;
+    private readonly ILogger<WalletService> _logger;
 
     public WalletService(
         IDbContextFactory<WalletContext> dbContextFactory,
         AsyncKeyedLocker<string> asyncKeyedLocker,
-        Network network)
+        Network network,
+        ILogger<WalletService> logger)
     {
         _dbContextFactory = dbContextFactory;
         _asyncKeyedLocker = asyncKeyedLocker;
         _network = network;
+        _logger = logger;
     }
 
     private IQueryable<Wallet> WalletQueryable(DbSet<Wallet> wallets)
@@ -295,16 +299,18 @@ public class WalletService
     
     private async Task AddScripts(string walletId, IEnumerable<NBitcoin.Script> scripts, WalletContext context, CancellationToken cancellationToken)
     {
-        await context.Scripts.UpsertRange(scripts.Select(script => new Script()
+        var scriptResult = await context.Scripts.UpsertRange(scripts.Select(script => new Script()
         {
             Id = script.ToHex(),
         })).NoUpdate().RunAsync(cancellationToken);
-        context.WalletScripts.UpsertRange(scripts.Select(script => new WalletScript()
+        var walletScriptRResult = await context.WalletScripts.UpsertRange(scripts.Select(script => new WalletScript()
         {
             ScriptId = script.ToHex(),
             WalletId = walletId,
             DerivationPath = null
         })).NoUpdate().RunAsync(cancellationToken);
+        
+        _logger.LogInformation($"Added {scriptResult}/{scripts.Count()} scripts and {walletScriptRResult}/{scripts.Count()}  wallet scripts for wallet {walletId}", scriptResult, walletScriptRResult);
     }
 
     public async Task AddSpendableToCoin(string walletId, (OutPoint outpoint, TxOut txOut, byte[] write)[] set,

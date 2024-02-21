@@ -27,13 +27,13 @@ public class LDKFilter : FilterInterface
     public void register_tx(byte[] txid, byte[] script_pubkey)
     {
         var script = Script.FromBytesUnsafe(script_pubkey);
-        _ = Track(script);
+        Track(script).GetAwaiter().GetResult();
     }
 
     public void register_output(WatchedOutput output)
     {
         var script = Script.FromBytesUnsafe(output.get_script_pubkey());
-        _ = Track(script);
+        Track(script).GetAwaiter().GetResult();
     }
 
     private async Task Track(Script script)

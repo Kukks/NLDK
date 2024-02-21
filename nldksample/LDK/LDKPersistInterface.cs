@@ -22,7 +22,8 @@ public class LDKPersistInterface : PersistInterface
     public LDKPersistInterface(CurrentWalletService currentWalletService, 
         WalletService walletService, 
         ExplorerClient explorerClient,
-        Network network, GroupTrackedSource groupTrackedSource)
+        Network network, 
+        GroupTrackedSource groupTrackedSource)
     {
         _walletService = walletService;
         _explorerClient = explorerClient;
