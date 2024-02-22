@@ -100,17 +100,17 @@ public static class LDKExtensions
             var chainParameters = provider.GetRequiredService<ChainParameters>();
             var currentWalletService = provider.GetRequiredService<CurrentWalletService>();
             var filter = provider.GetRequiredService<Filter>();
-            var channelManagerSerialized = walletService.GetArbitraryData<byte[]>("ChannelManager", currentWalletService.CurrentWallet).GetAwaiter().GetResult();
+            var channelManagerSerialized = currentWalletService
+                .GetSerializedChannelManager(entropySource, signerProvider).ConfigureAwait(false).GetAwaiter()
+                .GetResult();
+                
             if (channelManagerSerialized is not null)
             {
-                var channelMonitors = currentWalletService.GetInitialChannelMonitors(entropySource, signerProvider);
-                
-                return ChannelManagerHelper.Load(channelMonitors, channelManagerSerialized, entropySource, signerProvider, nodeSigner,
+                return ChannelManagerHelper.Load(channelManagerSerialized.Value.channelMonitors, channelManagerSerialized.Value.serializedChannelManager, entropySource, signerProvider, nodeSigner,
                     feeEstimator, watch, broadcasterInterface, router, logger, userConfig, filter);
             }
             return  ChannelManager.of(feeEstimator, watch, broadcasterInterface, router, logger,entropySource ,nodeSigner, signerProvider,userConfig,chainParameters,
                 (int) DateTimeOffset.Now.ToUnixTimeSeconds());
-            
         });
         services.AddScoped(provider => provider.GetRequiredService<ChannelManager>().as_ChannelMessageHandler());
         services.AddScoped(provider => provider.GetRequiredService<ChannelManager>().as_OffersMessageHandler());

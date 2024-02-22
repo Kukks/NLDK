@@ -1,4 +1,6 @@
-﻿using BTCPayServer.Lightning;
+﻿using System.Runtime.InteropServices.ComTypes;
+using System.Security.Cryptography;
+using BTCPayServer.Lightning;
 using NBitcoin;
 using NLDK;
 using org.ldk.structs;
@@ -33,32 +35,38 @@ public class PaymentsManager
     public async Task<BOLT11PaymentRequest> RequestPayment(LightMoney amount, TimeSpan expiry, string description)
     {
         var amt = amount == LightMoney.Zero ? Option_u64Z.none() : Option_u64Z.some(amount.MilliSatoshi);
-        var invoice = org.ldk.util.UtilMethods.create_invoice_from_channelmanager(_channelManager, _nodeSigner, _logger,
-            _network.GetLdkCurrency(), amt, description, (int) Math.Ceiling(expiry.TotalSeconds), Option_u16Z.none());
+        var preimage = RandomNumberGenerator.GetBytes(32);
+        var paymentHash = SHA256.HashData(preimage);
+        var epoch = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        var result = org.ldk.util.UtilMethods.create_invoice_from_channelmanager_and_duration_since_epoch_with_payment_hash(_channelManager, _nodeSigner, _logger,
+        _network.GetLdkCurrency(), amt, description,epoch, (int) Math.Ceiling(expiry.TotalSeconds),paymentHash,Option_u16Z.none());
+        //  var invoice = org.ldk.util.UtilMethods.create_invoice_from_channelmanager(_channelManager, _nodeSigner, _logger,
+        //     _network.GetLdkCurrency(), amt, description, (int) Math.Ceiling(expiry.TotalSeconds),Option_u16Z.none());
 
-        if (invoice is Result_Bolt11InvoiceSignOrCreationErrorZ.Result_Bolt11InvoiceSignOrCreationErrorZ_Err err)
+        if (result is Result_Bolt11InvoiceSignOrCreationErrorZ.Result_Bolt11InvoiceSignOrCreationErrorZ_Err err)
         {
             throw new Exception(err.err.to_str());
         }
-        var bolt11 = ((Result_Bolt11InvoiceSignOrCreationErrorZ.Result_Bolt11InvoiceSignOrCreationErrorZ_OK) invoice).res.to_str();
+        var invoice = ((Result_Bolt11InvoiceSignOrCreationErrorZ.Result_Bolt11InvoiceSignOrCreationErrorZ_OK) result).res;
+        
+        var bolt11 =invoice.to_str();
         var paymentRequest = BOLT11PaymentRequest.Parse(bolt11, _network);
         await _walletService.Payment(new LightningPayment()
         {
             WalletId = _currentWalletService.CurrentWallet,
             Inbound = true,
             Value = amount,
-            PaymentHash = paymentRequest.PaymentHash.ToString(),
-            Secret = paymentRequest.PaymentSecret.ToString(),
+            PaymentHash = Convert.ToHexString(paymentHash),
+            Secret = Convert.ToHexString(invoice.payment_secret()),
+            Preimage = Convert.ToHexString(preimage),
             Status = LightningPaymentStatus.Pending,
             Timestamp = DateTimeOffset.UtcNow
         });
         return paymentRequest;
     }
 
-    public async Task PayInvoice(BOLT11PaymentRequest paymentRequest, LightMoney explicitAmount = null)
+    public async Task PayInvoice(BOLT11PaymentRequest paymentRequest, LightMoney? explicitAmount = null)
     {
-        var paymentHash = paymentRequest.PaymentHash;
-
         var id = RandomUtils.GetBytes(32);
         var invoiceStr = paymentRequest.ToString();
         var invoice =
@@ -68,7 +76,7 @@ public class PaymentsManager
         amt = Math.Max(amt, explicitAmount?.MilliSatoshi ?? 0);
         var payParams =
             PaymentParameters.from_node_id(invoice.payee_pub_key(), (int) invoice.min_final_cltv_expiry_delta());
-        payParams.set_expiry_time(Option_u64Z.some(invoice.expiry_time()));
+        // payParams.set_expiry_time(Option_u64Z.some(invoice.expiry_time()));
         
         var lastHops = invoice.route_hints();
         var payee = Payee.clear(invoice.payee_pub_key(), lastHops, invoice.features(), (int) invoice.min_final_cltv_expiry_delta());

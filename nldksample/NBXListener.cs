@@ -4,6 +4,8 @@ using NBXplorer.DerivationStrategy;
 using NBXplorer.Models;
 using NLDK;
 
+
+public record TransactionUpdateEvent(Wallet Wallet, TrackedSource TrackedSource, TransactionInformation TransactionInformation);
 public class NBXListener : IHostedService
 {
     private readonly ExplorerClient _explorerClient;
@@ -22,7 +24,7 @@ public class NBXListener : IHostedService
 
     public event EventHandler<NewBlockEvent>? NewBlock;
 
-    public event EventHandler<(Wallet Wallet, TrackedSource TrackedSource, TransactionInformation TransactionInformation)>? TransactionUpdate;
+    public event EventHandler<TransactionUpdateEvent>? TransactionUpdate;
 
     public TaskCompletionSource ConnectedAndSynced { get; private set; } = new();
 
@@ -134,7 +136,7 @@ public class NBXListener : IHostedService
                         continue;
 
                     await _walletService.OnTransactionSeen(w,newTransactionEvent.TrackedSource, tx, cancellationToken);
-                    TransactionUpdate?.Invoke(this, (w, newTransactionEvent.TrackedSource, tx));
+                    TransactionUpdate?.Invoke(this, new (w, newTransactionEvent.TrackedSource, tx));
                     break;
             }
         }

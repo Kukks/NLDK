@@ -10,15 +10,14 @@ namespace nldksample.LDK;
 
 public class CurrentWalletService
 {
-    private readonly WalletService _walletService;
     private readonly NBXplorerNetwork _network;
+    private readonly WalletService _walletService;
 
     private Wallet? _wallet;
-    // private Dictionary<string, byte[]> _data;
-    public CurrentWalletService(WalletService walletService, NBXplorerNetwork network)
+    public CurrentWalletService(NBXplorerNetwork network, WalletService walletService)
     {
-        _walletService = walletService;
         _network = network;
+        _walletService = walletService;
     }
 
     public void SetWallet(Wallet wallet)
@@ -36,13 +35,6 @@ public class CurrentWalletService
             GroupTrackedSource = gts;
             break;
         }
-
-        // _walletService.GetArbitraryData(_wallet.Id).ContinueWith(task => 
-        // {
-        //     _data = task.Result.ToDictionary(kv => kv.Key.Replace(_wallet.Id, ""), kv => kv.Value);
-        //     
-        //     
-        // });
         WalletSelected.SetResult();
 
     }
@@ -62,27 +54,33 @@ public class CurrentWalletService
 
     public TaskCompletionSource WalletSelected { get; } = new();
 
-    // public bool IsThisWallet(TrackedSource trackedSource)
-    // {
-    //     if(trackedSource is WalletTrackedSource wts)
-    //         return wts.WalletId == CurrentWallet;
-    //     return _wallet.AliasWalletName.Contains(trackedSource.ToString());
-    // }
-
-    private ChannelMonitor[]? _channels = null;
-    private readonly AsyncNonKeyedLocker _ss = new(1);
+    private readonly TaskCompletionSource<ChannelMonitor[]?> icm = new();
     public GroupTrackedSource GroupTrackedSource { get; private set; } 
 
-    public ChannelMonitor[] GetInitialChannelMonitors(EntropySource entropySource, SignerProvider signerProvider)
+    public async Task<ChannelMonitor[]> GetInitialChannelMonitors()
     {
-        using (_ss.Lock())
+        return await icm.Task;
+    }
+    private async Task<ChannelMonitor[]> GetInitialChannelMonitors(EntropySource entropySource, SignerProvider signerProvider)
+    {
+        await WalletSelected.Task;
+        var data = _wallet.Channels?.Select(c => c.Data)?.ToArray() ?? Array.Empty<byte[]>();
+        var channels = ChannelManagerHelper.GetInitialMonitors(data, entropySource, signerProvider);
+        icm.SetResult(channels);
+        return channels;
+    }
+
+    public async Task<(byte[] serializedChannelManager, ChannelMonitor[] channelMonitors)?> GetSerializedChannelManager(EntropySource entropySource, SignerProvider signerProvider)
+    {
+        await WalletSelected.Task;
+        var data= await _walletService.GetArbitraryData<byte[]>("ChannelManager", CurrentWallet);
+        if (data is null)
         {
-            if (_channels is null)
-            {
-                var data = _wallet.Channels?.Select(c => c.Data)?.ToArray() ?? Array.Empty<byte[]>();
-                _channels = ChannelManagerHelper.GetInitialMonitors(data, entropySource, signerProvider);
-            }
-            return _channels;
+            icm.SetResult(Array.Empty<ChannelMonitor>());
+            return null;
         }
+
+        var channels = await GetInitialChannelMonitors(entropySource, signerProvider);
+        return (data, channels);
     }
 }

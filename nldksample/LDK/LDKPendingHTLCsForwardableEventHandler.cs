@@ -18,7 +18,7 @@ public class LDKPendingHTLCsForwardableEventHandler : ILDKEventHandler<Event.Eve
     {
         var time = Random.Shared.NextInt64(eventPendingHtlCsForwardable.time_forwardable,
             5 * eventPendingHtlCsForwardable.time_forwardable);
-        ScheduledTasks.Add((DateTimeOffset.UtcNow.AddMilliseconds(time), () =>
+        ScheduledTasks.Add((DateTimeOffset.UtcNow.AddSeconds(time), () =>
         {
             _channelManager.process_pending_htlc_forwards();
             return Task.CompletedTask;
